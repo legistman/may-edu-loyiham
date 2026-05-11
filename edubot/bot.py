@@ -124,7 +124,7 @@ async def request_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🔔 Yangi kirish so'rovi!\n\n"
             f"👤 Ism: {user.first_name}\n"
             f"🆔 ID: {user.id}\n"
-            f"📛 Username: @{user.username or 'yo'q'}"
+            f"📛 Username: @{user.username or 'yoq'}"
         ),
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
