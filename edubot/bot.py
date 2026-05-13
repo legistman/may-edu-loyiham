@@ -664,9 +664,10 @@ async def adm_user_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def adm_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    parts  = q.data.split("_")
-    action = parts[2]
-    tid    = int(parts[3])
+    # aua_ok_123, aua_prem_123, aua_unprem_123, aua_kick_123
+    # split("_", 2) => ["aua", "ok", "123"] yoki ["aua", "unprem", "123"]
+    _, action, tid_str = q.data.split("_", 2)
+    tid = int(tid_str)
     days   = int(S("premium_days") or "30")
     msg    = ""
     if action == "ok":
