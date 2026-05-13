@@ -220,6 +220,37 @@ class Database:
         """).fetchall()
         return [dict(r) for r in rows]
 
+    # ── RATING ───────────────────────────────────────────────────────────────────
+    def get_overall_rating(self):
+        """Har bir foydalanuvchining eng yuqori natijasi asosida reyting"""
+        rows = self.conn.execute("""
+            SELECT r.user_id, r.correct, r.total, r.test_id,
+                   t.title as test_title,
+                   u.first_name, u.full_name, u.username
+            FROM pdf_results r
+            JOIN users u ON r.user_id = u.user_id
+            JOIN pdf_tests t ON r.test_id = t.id
+            WHERE r.correct = (
+                SELECT MAX(r2.correct) FROM pdf_results r2 WHERE r2.user_id = r.user_id
+            )
+            GROUP BY r.user_id
+            ORDER BY r.correct DESC, r.taken_at DESC
+        """).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_test_rating(self, test_id):
+        """Bitta test bo'yicha reyting"""
+        rows = self.conn.execute("""
+            SELECT r.user_id, MAX(r.correct) as correct, r.total,
+                   u.first_name, u.full_name, u.username
+            FROM pdf_results r
+            JOIN users u ON r.user_id = u.user_id
+            WHERE r.test_id = ?
+            GROUP BY r.user_id
+            ORDER BY correct DESC
+        """, (test_id,)).fetchall()
+        return [dict(r) for r in rows]
+
     # ── STATS ─────────────────────────────────────────────────────────────────
     def get_stats(self):
         c = self.conn.cursor()
