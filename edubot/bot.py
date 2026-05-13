@@ -47,8 +47,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     context.user_data["step"] = "waiting_fullname"
     await update.message.reply_text(
-        "👋 Assalomu alaykum!\n\n"
-        "Botdan foydalanish uchun ismingiz va familiyangizni to'liq kiriting:\n\n"
+        "╔══════════════════════╗\n"
+        "        🎓 BMBA TEST BOT        \n"
+        "╚══════════════════════╝\n\n"
+        "Assalomu alaykum! 👋\n\n"
+        "📌 @legistman kanalining rasmiy o'quv boti\n\n"
+        "Bu yerda siz:\n"
+        "📝 BMBA darajasidagi testlarni ishlaysiz\n"
+        "📚 Maxsus qo'llanmalardan foydalanasiz\n"
+        "📊 Natijalaringizni kuzatasiz\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 Bot yaratuvchisi: @legistman_uz\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "✍️ Boshlash uchun ismingiz va familiyangizni\n"
+        "to'liq kiriting:\n\n"
         "📝 Masalan: Mallayev Ozodbek"
     )
 
@@ -79,11 +91,20 @@ async def about_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     kb = [[InlineKeyboardButton("⬅️ Orqaga qaytish", callback_data="back_welcome")]]
     await q.edit_message_text(
-        "🤖 Xush kelibsiz!\n\n"
-        "Bu bot @legistman kanaliga tegishli hisoblanadi! 📚\n\n"
-        "Bu yerda siz BMBA darajasidagi maxsus testlarni 📝 ishlashingiz\n"
-        "va natijalarni tekshirishingiz mumkin ✅\n\n"
-        "Shuningdek, maxsus o'quv qo'llanmalari 📖 bilan ham ta'minlanasiz.",
+        "╔══════════════════════╗\n"
+        "        🎓 BMBA TEST BOT        \n"
+        "╚══════════════════════╝\n\n"
+        "📌 @legistman kanalining rasmiy o'quv boti\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "Bu bot orqali siz:\n\n"
+        "📝 BMBA darajasidagi maxsus testlarni ishlaysiz\n"
+        "va natijalaringizni darhol bilib olasiz ✅\n\n"
+        "📚 Maxsus o'quv qo'llanmalar bilan\n"
+        "bilimlaringizni mustahkamlaysiz 💡\n\n"
+        "📊 Har bir test bo'yicha batafsil tahlil\n"
+        "va reytingda o'z o'rningizni ko'rasiz 🏆\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 Bot yaratuvchisi: @legistman_uz",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
@@ -93,10 +114,11 @@ async def about_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def free_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     kb = [
-        [InlineKeyboardButton("📝 TESTLAR",      callback_data="free_tests")],
-        [InlineKeyboardButton("📚 QO'LLANMALAR", callback_data="free_guides")],
-        [InlineKeyboardButton("⭐️ Premium olish", callback_data="buy_premium")],
-        [InlineKeyboardButton("⬅️ Orqaga",       callback_data="back_welcome")],
+        [InlineKeyboardButton("📝 TESTLAR",           callback_data="free_tests")],
+        [InlineKeyboardButton("📚 QO'LLANMALAR",      callback_data="free_guides")],
+        [InlineKeyboardButton("⭐️ Premium olish",     callback_data="buy_premium")],
+        [InlineKeyboardButton("📩 Adminga murojaat",  callback_data="contact_admin")],
+        [InlineKeyboardButton("⬅️ Orqaga",            callback_data="back_welcome")],
     ]
     await q.edit_message_text("🆓 Bepul bo'lim", reply_markup=InlineKeyboardMarkup(kb))
 
@@ -149,10 +171,11 @@ async def premium_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     uid = q.from_user.id
     kb = [
-        [InlineKeyboardButton("📝 Testlar",      callback_data="menu_tests")],
-        [InlineKeyboardButton("📚 Qo'llanmalar", callback_data="menu_guides")],
-        [InlineKeyboardButton("📊 Natijalarim",  callback_data="menu_results")],
-        [InlineKeyboardButton("⬅️ Orqaga",       callback_data="back_welcome")],
+        [InlineKeyboardButton("📝 Testlar",           callback_data="menu_tests")],
+        [InlineKeyboardButton("📚 Qo'llanmalar",      callback_data="menu_guides")],
+        [InlineKeyboardButton("📊 Natijalarim",       callback_data="menu_results")],
+        [InlineKeyboardButton("📩 Adminga murojaat",  callback_data="contact_admin")],
+        [InlineKeyboardButton("⬅️ Orqaga",            callback_data="back_welcome")],
     ]
     await q.edit_message_text(
         f"⭐️ Premium bo'lim\n\n👑 Premium: {exp_str(uid)} gacha aktiv",
@@ -798,6 +821,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     txt  = update.message.text.strip() if update.message and update.message.text else ""
 
     # Yangi foydalanuvchi
+    # Murojaat xabari
+    if step == "waiting_contact_msg":
+        back = context.user_data.get("contact_back", "free_menu")
+        u    = db.get_user(uid)
+        name = uname(u) if u else str(uid)
+        context.user_data.clear()
+        # Adminga yuborish
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"📩 Yangi murojaat!\n\n"
+            f"👤 {name}\n"
+            f"🆔 {uid}\n"
+            f"📛 @{update.effective_user.username or 'yoq'}\n\n"
+            f"💬 {update.message.text}"
+        )
+        kb = [[InlineKeyboardButton("⬅️ Menyuga qaytish", callback_data=back)]]
+        await update.message.reply_text(
+            "✅ Murojaatingiz adminga yuborildi!\n\n"
+            "Admin 24 soat ichida ko'rib chiqadi. 🙏",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+        return
+
     if step == "waiting_fullname":
         if len(txt.split()) < 2:
             await update.message.reply_text("To'liq ism va familiyangizni kiriting.\nMasalan: Aliyev Jasur")
@@ -840,15 +886,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(clean) != n:
             await update.message.reply_text(f"⚠️ {len(clean)} ta harf, {n} ta kerak. Qaytadan:")
             return
-        db.add_pdf_test(context.user_data.get("pdf_title",""), context.user_data.get("pdf_file_id",""),
-                        n, clean, context.user_data.get("pdf_is_free", 0))
+        title   = context.user_data.get("pdf_title","")
+        file_id = context.user_data.get("pdf_file_id","")
+        is_free = context.user_data.get("pdf_is_free", 0)
+        db.add_pdf_test(title, file_id, n, clean, is_free)
         context.user_data.clear()
-        await update.message.reply_text(f"✅ Test qo'shildi!\n\n/admin")
+        ic = "🆓 Bepul" if is_free else "⭐️ Premium"
+        kb = [[InlineKeyboardButton("📝 Testlarga",    callback_data="adm_tests"),
+               InlineKeyboardButton("🔧 Admin panel",  callback_data="adm_back")]]
+        await update.message.reply_text(
+            f"✅ Test qo'shildi!\n📝 {title}\n{ic}",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
 
     elif step == "rename_test":
-        db.update_pdf_test(context.user_data["edit_id"], title=txt)
+        tid = context.user_data["edit_id"]
+        db.update_pdf_test(tid, title=txt)
         context.user_data.clear()
-        await update.message.reply_text(f"✅ Nom yangilandi: {txt}\n\n/admin")
+        kb = [[InlineKeyboardButton("📝 Testga qaytish", callback_data=f"atv_{tid}"),
+               InlineKeyboardButton("🔧 Admin panel",    callback_data="adm_back")]]
+        await update.message.reply_text(f"✅ Nom yangilandi: {txt}", reply_markup=InlineKeyboardMarkup(kb))
 
     elif step == "update_key":
         n     = context.user_data.get("edit_cnt", 30)
@@ -856,9 +913,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(clean) != n:
             await update.message.reply_text(f"⚠️ {len(clean)} ta harf, {n} ta kerak. Qaytadan:")
             return
-        db.update_pdf_test(context.user_data["edit_id"], answer_key=clean)
+        tid = context.user_data["edit_id"]
+        db.update_pdf_test(tid, answer_key=clean)
         context.user_data.clear()
-        await update.message.reply_text(f"✅ Kalit yangilandi: {clean}\n\n/admin")
+        kb = [[InlineKeyboardButton("📝 Testga qaytish", callback_data=f"atv_{tid}"),
+               InlineKeyboardButton("🔧 Admin panel",    callback_data="adm_back")]]
+        await update.message.reply_text(f"✅ Kalit yangilandi!", reply_markup=InlineKeyboardMarkup(kb))
 
     elif step == "add_guide_title":
         context.user_data["guide_title"] = txt
@@ -880,31 +940,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Qo'llanma turi:", reply_markup=InlineKeyboardMarkup(kb))
 
     elif step == "edit_guide_title":
-        db.update_guide(context.user_data["edit_id"], title=txt)
+        gid = context.user_data["edit_id"]
+        db.update_guide(gid, title=txt)
         context.user_data.clear()
-        await update.message.reply_text(f"✅ Nom yangilandi: {txt}\n\n/admin")
+        kb = [[InlineKeyboardButton("📖 Qo'llanmaga qaytish", callback_data=f"agv_{gid}"),
+               InlineKeyboardButton("🔧 Admin panel",         callback_data="adm_back")]]
+        await update.message.reply_text(f"✅ Nom yangilandi: {txt}", reply_markup=InlineKeyboardMarkup(kb))
 
     elif step == "edit_guide_content":
-        db.update_guide(context.user_data["edit_id"], content=txt)
+        gid = context.user_data["edit_id"]
+        db.update_guide(gid, content=txt)
         context.user_data.clear()
-        await update.message.reply_text("✅ Matn yangilandi!\n\n/admin")
+        kb = [[InlineKeyboardButton("📖 Qo'llanmaga qaytish", callback_data=f"agv_{gid}"),
+               InlineKeyboardButton("🔧 Admin panel",         callback_data="adm_back")]]
+        await update.message.reply_text("✅ Matn yangilandi!", reply_markup=InlineKeyboardMarkup(kb))
 
     elif step == "set_price":
         db.set_setting("premium_price", txt)
         context.user_data.clear()
-        await update.message.reply_text(f"✅ Narx yangilandi: {txt} so'm\n\n/admin")
+        kb = [[InlineKeyboardButton("⚙️ Sozlamalarga qaytish", callback_data="adm_settings"),
+               InlineKeyboardButton("🔧 Admin panel",          callback_data="adm_back")]]
+        await update.message.reply_text(f"✅ Narx yangilandi: {txt} so'm", reply_markup=InlineKeyboardMarkup(kb))
 
 
 
     elif step == "set_card":
         db.set_setting("card_number", txt)
         context.user_data.clear()
-        await update.message.reply_text(f"✅ Karta yangilandi: {txt}\n\n/admin")
+        kb = [[InlineKeyboardButton("⚙️ Sozlamalarga qaytish", callback_data="adm_settings"),
+               InlineKeyboardButton("🔧 Admin panel",          callback_data="adm_back")]]
+        await update.message.reply_text(f"✅ Karta yangilandi: {txt}", reply_markup=InlineKeyboardMarkup(kb))
 
     elif step == "set_owner":
         db.set_setting("card_owner", txt)
         context.user_data.clear()
-        await update.message.reply_text(f"✅ Karta egasi yangilandi: {txt}\n\n/admin")
+        kb = [[InlineKeyboardButton("⚙️ Sozlamalarga qaytish", callback_data="adm_settings"),
+               InlineKeyboardButton("🔧 Admin panel",          callback_data="adm_back")]]
+        await update.message.reply_text(f"✅ Karta egasi yangilandi: {txt}", reply_markup=InlineKeyboardMarkup(kb))
 
     elif step == "broadcast":
         users = db.get_all_users()
@@ -914,7 +986,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try: await context.bot.send_message(u["user_id"], f"📢\n\n{txt}"); sent += 1
                 except: pass
         context.user_data.clear()
-        await update.message.reply_text(f"✅ {sent} ta foydalanuvchiga yuborildi.")
+        kb = [[InlineKeyboardButton("🔧 Admin panel", callback_data="adm_back")]]
+        await update.message.reply_text(f"✅ {sent} ta foydalanuvchiga yuborildi.", reply_markup=InlineKeyboardMarkup(kb))
 
 async def handle_guide_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Qo'llanmaga PDF yuklash"""
@@ -997,6 +1070,25 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["step"] = data
         await q.edit_message_text(hints.get(data,"Yangi qiymatni yozing:") + "\n\nBekor: /admin")
 
+async def contact_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    uid = q.from_user.id
+    # Bepul yoki premium ekanini aniqlaymiz
+    back = "premium_menu" if is_premium(uid) else "free_menu"
+    context.user_data["step"]          = "waiting_contact_msg"
+    context.user_data["contact_back"]  = back
+    await q.edit_message_text(
+        "📩 Adminga murojaat\n\n"
+        "Bot haqida fikr-mulohaza yoki kamchilik bo'lsa\n"
+        "quyidagi usullardan birida murojaat qiling:\n\n"
+        "💬 @legistman_uz — to'g'ridan-to'g'ri yozing\n\n"
+        "✍️ Yoki murojaatingizni shu yerga yozing,\n"
+        "admin 24 soat ichida ko'rib chiqadi:",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("⬅️ Orqaga", callback_data=back)]
+        ])
+    )
+
 async def back_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     await show_welcome(update, context)
@@ -1020,6 +1112,7 @@ def main():
     app.add_handler(CallbackQueryHandler(send_payment_proof, pattern=r"^send_payment_proof$"))
     app.add_handler(CallbackQueryHandler(payment_action,     pattern=r"^pay_(ok|no)_\d+$"))
     app.add_handler(CallbackQueryHandler(back_welcome,       pattern=r"^back_welcome$"))
+    app.add_handler(CallbackQueryHandler(contact_admin,      pattern=r"^contact_admin$"))
     app.add_handler(CallbackQueryHandler(menu_tests,         pattern=r"^menu_tests$"))
     app.add_handler(CallbackQueryHandler(show_pdf_test,      pattern=r"^pdf_test_\d+$"))
     app.add_handler(CallbackQueryHandler(submit_test_prompt, pattern=r"^submit_test_\d+$"))
