@@ -92,18 +92,36 @@ async def about_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ═══════════════════════════════════════════════════════════════════════════════
 async def free_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
-    tests  = db.get_free_pdf_tests()
-    guides = db.get_free_guides()
+    kb = [
+        [InlineKeyboardButton("📝 TESTLAR",      callback_data="free_tests")],
+        [InlineKeyboardButton("📚 QO'LLANMALAR", callback_data="free_guides")],
+        [InlineKeyboardButton("⭐️ Premium olish", callback_data="buy_premium")],
+        [InlineKeyboardButton("⬅️ Orqaga",       callback_data="back_welcome")],
+    ]
+    await q.edit_message_text("🆓 Bepul bo'lim", reply_markup=InlineKeyboardMarkup(kb))
+
+async def free_tests_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    tests = db.get_free_pdf_tests()
     kb = []
     for t in tests:
         kb.append([InlineKeyboardButton(f"📝 {t['title']}", callback_data=f"pdf_test_{t['id']}")])
+    if not tests:
+        kb.append([InlineKeyboardButton("⭐️ Premium olish", callback_data="buy_premium")])
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="free_menu")])
+    txt = "📝 Bepul testlar:" if tests else "Hozircha bepul testlar yo'q."
+    await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb))
+
+async def free_guides_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    guides = db.get_free_guides()
+    kb = []
     for g in guides:
         kb.append([InlineKeyboardButton(f"📖 {g['title']}", callback_data=f"guide_{g['id']}")])
-    if not tests and not guides:
+    if not guides:
         kb.append([InlineKeyboardButton("⭐️ Premium olish", callback_data="buy_premium")])
-    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="back_welcome")])
-    txt = "🆓 Bepul bo'lim\n\n"
-    txt += "Testlar va qo'llanmalar mavjud:" if (tests or guides) else "Hozircha bepul kontent yo'q."
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="free_menu")])
+    txt = "📚 Bepul qo'llanmalar:" if guides else "Hozircha bepul qo'llanmalar yo'q."
     await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb))
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -734,16 +752,14 @@ async def adm_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     card  = S("card_number")
     owner = S("card_owner")
     kb = [
-        [InlineKeyboardButton("💰 Narxni o'zgartirish",    callback_data="set_price")],
-        [InlineKeyboardButton("📅 Kunni o'zgartirish",     callback_data="set_days")],
+        [InlineKeyboardButton("💰 Narxni o'zgartirish",        callback_data="set_price")],
         [InlineKeyboardButton("💳 Karta raqamini o'zgartirish", callback_data="set_card")],
         [InlineKeyboardButton("👤 Karta egasini o'zgartirish",  callback_data="set_owner")],
-        [InlineKeyboardButton("⬅️ Orqaga",                 callback_data="adm_back")],
+        [InlineKeyboardButton("⬅️ Orqaga",                     callback_data="adm_back")],
     ]
     await q.edit_message_text(
         f"⚙️ Sozlamalar\n{'─'*22}\n"
-        f"💰 Premium narx: {price} so'm\n"
-        f"📅 Muddat: {days} kun\n"
+        f"💰 Premium narx: {price} so'm / 30 kun\n"
         f"💳 Karta: {card}\n"
         f"👤 Egasi: {owner}",
         reply_markup=InlineKeyboardMarkup(kb)
@@ -765,6 +781,15 @@ async def handle_pdf_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["step"]        = "pdf_key"
     n = context.user_data.get("pdf_count", 30)
     await update.message.reply_text(f"✅ PDF qabul qilindi!\n\n{n} ta javob kalitini yozing (ABCD):")
+
+async def handle_pdf_or_guide(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """PDF kelganda test yoki qo'llanma ekanini step orqali aniqlaymiz"""
+    if not is_admin(update.effective_user.id): return
+    step = context.user_data.get("step", "")
+    if step == "waiting_pdf_file":
+        await handle_pdf_upload(update, context)
+    elif step == "waiting_guide_file":
+        await handle_guide_file(update, context)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid  = update.effective_user.id
@@ -836,10 +861,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif step == "add_guide_title":
         context.user_data["guide_title"] = txt
-        context.user_data["step"]        = "add_guide_content"
-        await update.message.reply_text("Qo'llanma matnini yozing:")
+        context.user_data["step"]        = "waiting_guide_file"
+        await update.message.reply_text(
+            f"✅ Sarlavha: {txt}\n\n"
+            f"2️⃣ Endi PDF faylni yuboring:\n"
+            f"(Faqat PDF formatda)\n\n"
+            f"Bekor: /admin"
+        )
 
     elif step == "add_guide_content":
+        # Matn ham qabul qilinadi (fayl o'rniga)
         context.user_data["guide_content"] = txt
         context.user_data["guide_file_id"] = ""
         context.user_data["step"] = "add_guide_type"
@@ -862,14 +893,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
         await update.message.reply_text(f"✅ Narx yangilandi: {txt} so'm\n\n/admin")
 
-    elif step == "set_days":
-        try:
-            int(txt)
-            db.set_setting("premium_days", txt)
-            context.user_data.clear()
-            await update.message.reply_text(f"✅ Muddat yangilandi: {txt} kun\n\n/admin")
-        except:
-            await update.message.reply_text("Faqat raqam yozing. Masalan: 30")
+
 
     elif step == "set_card":
         db.set_setting("card_number", txt)
@@ -892,22 +916,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ {sent} ta foydalanuvchiga yuborildi.")
 
 async def handle_guide_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Qo'llanmaga fayl (PDF, doc) yuklash"""
+    """Qo'llanmaga PDF yuklash"""
     if not is_admin(update.effective_user.id): return
     step = context.user_data.get("step", "")
-    if step not in ("add_guide_content", "waiting_guide_file"): return
+    if step != "waiting_guide_file": return
     doc = update.message.document
     if not doc: return
-    context.user_data["guide_file_id"] = doc.file_id
-    context.user_data["guide_file_name"] = doc.file_name or "fayl"
-    # Agar matn ham kiritilmagan bo'lsa, shu fayl nom bo'lsin
-    if not context.user_data.get("guide_content"):
-        context.user_data["guide_content"] = doc.file_name or "Fayl"
+    context.user_data["guide_file_id"]   = doc.file_id
+    context.user_data["guide_content"]   = doc.file_name or "PDF fayl"
     context.user_data["step"] = "add_guide_type"
     kb = [[InlineKeyboardButton("🆓 Bepul",    callback_data="guide_type_free"),
            InlineKeyboardButton("⭐️ Premium", callback_data="guide_type_premium")]]
     await update.message.reply_text(
-        f"✅ Fayl qabul qilindi: {doc.file_name}\n\nQo'llanma turi:",
+        f"✅ PDF qabul qilindi: {doc.file_name}\n\n3️⃣ Qo'llanma turi:",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
@@ -932,7 +953,11 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "adm_test_add":      await adm_test_add_prompt(update, context)
     elif data == "adm_guide_add":
         context.user_data["step"] = "add_guide_title"
-        await q.edit_message_text("📚 Qo'llanma sarlavhasini yozing:\nBekor: /admin")
+        await q.edit_message_text(
+            "📚 Yangi qo'llanma\n\n"
+            "1️⃣ Avval sarlavhani yozing:\n"
+            "Bekor: /admin"
+        )
 
     elif data.startswith("pdf_type_"):
         is_free = 1 if data == "pdf_type_free" else 0
@@ -986,6 +1011,8 @@ def main():
     # Umumiy
     app.add_handler(CallbackQueryHandler(about_bot,          pattern=r"^about_bot$"))
     app.add_handler(CallbackQueryHandler(free_menu,          pattern=r"^free_menu$"))
+    app.add_handler(CallbackQueryHandler(free_tests_list,    pattern=r"^free_tests$"))
+    app.add_handler(CallbackQueryHandler(free_guides_list,   pattern=r"^free_guides$"))
     app.add_handler(CallbackQueryHandler(premium_info,       pattern=r"^premium_info$"))
     app.add_handler(CallbackQueryHandler(premium_menu,       pattern=r"^premium_menu$"))
     app.add_handler(CallbackQueryHandler(buy_premium,        pattern=r"^buy_premium$"))
@@ -1018,7 +1045,7 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_handler, pattern=r"^(adm_|pdf_type_|guide_type_|set_|agv_|agt_|agd_|agdc_|agn_|age_)"))
 
     # Fayllar va matnlar
-    app.add_handler(MessageHandler(filters.Document.PDF, handle_pdf_upload))
+    app.add_handler(MessageHandler(filters.Document.PDF & ~filters.COMMAND, handle_pdf_or_guide))
     app.add_handler(MessageHandler(filters.Document.ALL & ~filters.Document.PDF, handle_guide_file))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_message))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
