@@ -38,6 +38,7 @@ class Database:
             title      TEXT NOT NULL,
             content    TEXT NOT NULL,
             is_free    INTEGER DEFAULT 1,
+            file_id    TEXT    DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
         c.execute("""CREATE TABLE IF NOT EXISTS payment_requests (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,6 +59,8 @@ class Database:
                 try: c.execute(f"ALTER TABLE {tbl[0]} ADD COLUMN {col[0]} {col[1]}")
                 except: pass
         try: c.execute("ALTER TABLE guides ADD COLUMN is_free INTEGER DEFAULT 1")
+        except: pass
+        try: c.execute("ALTER TABLE guides ADD COLUMN file_id TEXT DEFAULT ''")
         except: pass
         self.conn.commit()
 
@@ -187,8 +190,8 @@ class Database:
         return [dict(r) for r in rows]
 
     # ── GUIDES ────────────────────────────────────────────────────────────────
-    def add_guide(self, title, content, is_free=1):
-        self.conn.execute("INSERT INTO guides (title,content,is_free) VALUES (?,?,?)", (title, content, is_free))
+    def add_guide(self, title, content, is_free=1, file_id=""):
+        self.conn.execute("INSERT INTO guides (title,content,is_free,file_id) VALUES (?,?,?,?)", (title, content, is_free, file_id))
         self.conn.commit()
 
     def get_all_guides(self):
@@ -201,13 +204,14 @@ class Database:
         r = self.conn.execute("SELECT * FROM guides WHERE id=?", (guide_id,)).fetchone()
         return dict(r) if r else None
 
-    def update_guide(self, guide_id, title=None, content=None, is_free=None):
+    def update_guide(self, guide_id, title=None, content=None, is_free=None, file_id=None):
         g = self.get_guide(guide_id)
         if not g: return
-        t = title   if title   is not None else g["title"]
-        c = content if content is not None else g["content"]
-        f = is_free if is_free is not None else g["is_free"]
-        self.conn.execute("UPDATE guides SET title=?,content=?,is_free=? WHERE id=?", (t, c, f, guide_id))
+        t  = title   if title   is not None else g["title"]
+        c  = content if content is not None else g["content"]
+        f  = is_free if is_free is not None else g["is_free"]
+        fi = file_id if file_id is not None else g.get("file_id","")
+        self.conn.execute("UPDATE guides SET title=?,content=?,is_free=?,file_id=? WHERE id=?", (t, c, f, fi, guide_id))
         self.conn.commit()
 
     def delete_guide(self, guide_id):
