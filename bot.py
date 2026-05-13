@@ -49,7 +49,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Assalomu alaykum!\n\n"
         "Botdan foydalanish uchun ismingiz va familiyangizni to'liq kiriting:\n\n"
-        "📝 Masalan: Aliyev Jasur"
+        "📝 Masalan: Mallayev Ozodbek"
     )
 
 async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -295,24 +295,55 @@ async def handle_test_answers(update: Update, context: ContextTypes.DEFAULT_TYPE
                   for i, (u, k) in enumerate(zip(clean, key)) if u != k]
     togri_list = "\n".join(f"  {i+1}–{k}" for i, k in enumerate(key))
 
-    result = (
-        f"📊 Test natijasi\n{'─'*26}\n"
-        f"📋 Jami savollar:    {n} ta\n"
-        f"✅ To'g'ri javoblar: {correct} ta\n"
-        f"❌ Xato javoblar:    {wrong} ta\n"
-        f"🏅 Ball: {ball} / {max_ball}\n"
-        f"📈 Foiz: {pct}%\n"
-        f"🎯 {baho}\n"
-    )
-    if xato_lines:
-        result += f"\n{'─'*26}\n❌ Xato savollar ({wrong} ta):\n" + "\n".join(xato_lines[:30])
-    result += f"\n\n{'─'*26}\n✅ To'g'ri javoblar kaliti:\n{togri_list}"
+    # Test bepulmi yoki premium?
+    test_obj = db.get_pdf_test(test_id)
+    is_free_test = test_obj.get("is_free", 0) if test_obj else 0
+    prem_user = is_premium(uid)
 
-    db.save_pdf_result(uid, test_id, correct, n, clean)
-    context.user_data.clear()
-    kb = [[InlineKeyboardButton("📝 Yana test", callback_data="menu_tests"),
-           InlineKeyboardButton("🏠 Bosh menyu", callback_data="back_welcome")]]
-    await update.message.reply_text(result, reply_markup=InlineKeyboardMarkup(kb))
+    if is_free_test and not prem_user:
+        # Bepul test — faqat statistika, tahlil yo'q
+        result = (
+            f"📊 Test natijasi\n{'─'*26}\n"
+            f"📋 Jami savollar:    {n} ta\n"
+            f"✅ To'g'ri javoblar: {correct} ta\n"
+            f"❌ Xato javoblar:    {wrong} ta\n"
+            f"🏅 Ball: {ball} / {max_ball}\n"
+            f"📈 Foiz: {pct}%\n"
+            f"🎯 {baho}\n\n"
+            f"{'─'*26}\n"
+            f"💡 Barcha to'g'ri javoblar va batafsil\n"
+            f"xato tahlilini ko'rish uchun:\n\n"
+            f"⭐️ Premium versiyani oling!"
+        )
+        db.save_pdf_result(uid, test_id, correct, n, clean)
+        context.user_data.clear()
+        kb = [
+            [InlineKeyboardButton("⭐️ Premium olish", callback_data="buy_premium")],
+            [InlineKeyboardButton("📝 Yana test",      callback_data="menu_tests")],
+            [InlineKeyboardButton("🏠 Bosh menyu",     callback_data="back_welcome")],
+        ]
+        await update.message.reply_text(result, reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        # Premium test — to'liq tahlil
+        result = (
+            f"📊 Test natijasi\n{'─'*26}\n"
+            f"📋 Jami savollar:    {n} ta\n"
+            f"✅ To'g'ri javoblar: {correct} ta\n"
+            f"❌ Xato javoblar:    {wrong} ta\n"
+            f"🏅 Ball: {ball} / {max_ball}\n"
+            f"📈 Foiz: {pct}%\n"
+            f"🎯 {baho}\n"
+        )
+        if xato_lines:
+            result += f"\n{'─'*26}\n❌ Xato savollar ({wrong} ta):\n" + "\n".join(xato_lines[:30])
+        result += f"\n\n{'─'*26}\n✅ To'g'ri javoblar kaliti:\n{togri_list}"
+        db.save_pdf_result(uid, test_id, correct, n, clean)
+        context.user_data.clear()
+        kb = [
+            [InlineKeyboardButton("📝 Yana test",  callback_data="menu_tests")],
+            [InlineKeyboardButton("🏠 Bosh menyu", callback_data="back_welcome")],
+        ]
+        await update.message.reply_text(result, reply_markup=InlineKeyboardMarkup(kb))
     return True
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -335,7 +366,23 @@ async def show_guide(update: Update, context: ContextTypes.DEFAULT_TYPE):
     g = db.get_guide(int(q.data.split("_")[1]))
     if not g: return
     kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="free_menu")]]
-    await q.edit_message_text(f"📖 {g['title']}\n\n{g['content']}"[:4000], reply_markup=InlineKeyboardMarkup(kb))
+    file_id = g.get("file_id","")
+    if file_id:
+        # Avval faylni yuborish, keyin matn
+        await context.bot.send_document(
+            q.message.chat_id, file_id,
+            caption=f"📖 {g['title']}"
+        )
+        if g.get("content") and g["content"] != g["title"]:
+            await context.bot.send_message(
+                q.message.chat_id,
+                g["content"][:4000],
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
+        else:
+            await context.bot.send_message(q.message.chat_id, "⬅️", reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await q.edit_message_text(f"📖 {g['title']}\n\n{g['content']}"[:4000], reply_markup=InlineKeyboardMarkup(kb))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  NATIJALAR
@@ -598,29 +645,36 @@ async def adm_user_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
 async def adm_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; await q.answer()
+    q = update.callback_query
     parts  = q.data.split("_")
     action = parts[2]
     tid    = int(parts[3])
     days   = int(S("premium_days") or "30")
+    msg    = ""
     if action == "ok":
         db.set_user_status(tid, "approved")
-        await context.bot.send_message(tid, "✅ Botdan foydalanishga ruxsat berildi! /start bosing.")
-        await q.answer("✅ Tasdiqlandi!", show_alert=True)
+        try: await context.bot.send_message(tid, "✅ Botdan foydalanishga ruxsat berildi! /start bosing.")
+        except: pass
+        msg = "✅ Tasdiqlandi!"
     elif action == "prem":
         exp = datetime.now() + timedelta(days=days)
         db.set_premium(tid, exp)
-        await context.bot.send_message(tid, f"⭐️ Premium berildi! {exp.strftime('%d.%m.%Y')} gacha. /start bosing.")
-        await q.answer("⭐️ Premium berildi!", show_alert=True)
+        try: await context.bot.send_message(tid, f"⭐️ Premium berildi! {exp.strftime('%d.%m.%Y')} gacha. /start bosing.")
+        except: pass
+        msg = "⭐️ Premium berildi!"
     elif action == "unprem":
         db.remove_premium(tid)
-        await context.bot.send_message(tid, "ℹ️ Premium obunangiz bekor qilindi.")
-        await q.answer("Premium olib tashlandi!", show_alert=True)
+        try: await context.bot.send_message(tid, "ℹ️ Premium obunangiz bekor qilindi.")
+        except: pass
+        msg = "Premium olib tashlandi!"
     elif action == "kick":
         db.set_user_status(tid, "rejected")
-        await context.bot.send_message(tid, "🚫 Botdan foydalanish huquqingiz bekor qilindi.")
-        await q.answer("🚫 Chiqarib yuborildi!", show_alert=True)
-    q.data = f"aud_{tid}"; await adm_user_detail(update, context)
+        try: await context.bot.send_message(tid, "🚫 Botdan foydalanish huquqingiz bekor qilindi.")
+        except: pass
+        msg = "🚫 Chiqarib yuborildi!"
+    await q.answer(msg, show_alert=True)
+    q.data = f"aud_{tid}"
+    await adm_user_detail(update, context)
 
 # ── TO'LOV SO'ROVLARI ────────────────────────────────────────────────────────
 async def adm_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -787,6 +841,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif step == "add_guide_content":
         context.user_data["guide_content"] = txt
+        context.user_data["guide_file_id"] = ""
         context.user_data["step"] = "add_guide_type"
         kb = [[InlineKeyboardButton("🆓 Bepul",    callback_data="guide_type_free"),
                InlineKeyboardButton("⭐️ Premium", callback_data="guide_type_premium")]]
@@ -836,6 +891,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
         await update.message.reply_text(f"✅ {sent} ta foydalanuvchiga yuborildi.")
 
+async def handle_guide_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Qo'llanmaga fayl (PDF, doc) yuklash"""
+    if not is_admin(update.effective_user.id): return
+    step = context.user_data.get("step", "")
+    if step not in ("add_guide_content", "waiting_guide_file"): return
+    doc = update.message.document
+    if not doc: return
+    context.user_data["guide_file_id"] = doc.file_id
+    context.user_data["guide_file_name"] = doc.file_name or "fayl"
+    # Agar matn ham kiritilmagan bo'lsa, shu fayl nom bo'lsin
+    if not context.user_data.get("guide_content"):
+        context.user_data["guide_content"] = doc.file_name or "Fayl"
+    context.user_data["step"] = "add_guide_type"
+    kb = [[InlineKeyboardButton("🆓 Bepul",    callback_data="guide_type_free"),
+           InlineKeyboardButton("⭐️ Premium", callback_data="guide_type_premium")]]
+    await update.message.reply_text(
+        f"✅ Fayl qabul qilindi: {doc.file_name}\n\nQo'llanma turi:",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  CALLBACK HANDLER (qolgan barcha)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -866,8 +941,11 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("✅ Turi tanlandi!\n\nEndi PDF faylni yuboring:")
 
     elif data.startswith("guide_type_"):
-        is_free = 1 if data == "guide_type_free" else 0
-        db.add_guide(context.user_data.get("guide_title",""), context.user_data.get("guide_content",""), is_free)
+        is_free  = 1 if data == "guide_type_free" else 0
+        title    = context.user_data.get("guide_title","")
+        text_c   = context.user_data.get("guide_content","")
+        file_id  = context.user_data.get("guide_file_id","")
+        db.add_guide(title, text_c, is_free, file_id)
         context.user_data.clear()
         await q.edit_message_text("✅ Qo'llanma qo'shildi!\n\n/admin")
 
@@ -941,6 +1019,7 @@ def main():
 
     # Fayllar va matnlar
     app.add_handler(MessageHandler(filters.Document.PDF, handle_pdf_upload))
+    app.add_handler(MessageHandler(filters.Document.ALL & ~filters.Document.PDF, handle_guide_file))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_message))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
