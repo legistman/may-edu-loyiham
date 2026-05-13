@@ -3,947 +3,939 @@ import os
 import re
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    Application, CommandHandler, CallbackQueryHandler,
+    MessageHandler, filters, ContextTypes
+)
 from database import Database
 
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "123456789"))
-KARTA_RAQAM = "9860 3501 4876 2387"
-KARTA_EGASI = "Mallayev Ozodbek"
-PREMIUM_NARX = "349 000 so'm"
-PREMIUM_KUN = 30
+BOT_TOKEN  = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+ADMIN_ID   = int(os.getenv("ADMIN_ID", "123456789"))
+KARTA      = "9860 3501 4876 2387"
+KARTA_EGASI= "Mallayev Ozodbek"
+NARX       = "349 000 so'm"
+PREMIUM_KUN= 30
 
 db = Database()
 
-def is_admin(uid): return uid == ADMIN_ID
-def is_approved(uid): return db.get_user_status(uid) in ("approved", "premium")
+# ─── yordamchi ───────────────────────────────────────────────────────────────
+def is_admin(uid):  return uid == ADMIN_ID
+
 def is_premium(uid):
-    status = db.get_user_status(uid)
-    if status != "premium": return False
+    u = db.get_user(uid)
+    if not u or u["status"] != "premium": return False
     exp = db.get_premium_expiry(uid)
-    if not exp: return False
-    if datetime.now() > exp:
+    if not exp or datetime.now() > exp:
         db.set_user_status(uid, "approved")
         return False
     return True
 
-# ═══════════════════════════════════════════
-#  START
-# ═══════════════════════════════════════════
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    db.add_user(user.id, user.username or "", user.first_name)
+def is_approved(uid):
+    return db.get_user_status(uid) in ("approved", "premium")
 
-    if is_admin(user.id):
+def premium_exp_str(uid):
+    exp = db.get_premium_expiry(uid)
+    return exp.strftime("%d.%m.%Y") if exp else "?"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  /start
+# ─────────────────────────────────────────────────────────────────────────────
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user  = update.effective_user
+    uid   = user.id
+    context.user_data.clear()
+
+    # Admin
+    if is_admin(uid):
+        db.add_user(uid, user.username or "", user.first_name, user.first_name)
         await show_admin_menu(update, context)
         return
 
-    status = db.get_user_status(user.id)
+    existing = db.get_user(uid)
 
-    if status in ("approved", "premium"):
-        await show_main_menu(update, context)
+    # Qaytib kelgan foydalanuvchi
+    if existing and existing.get("full_name"):
+        await show_welcome_menu(update, context, existing["full_name"])
         return
 
-    # Yangi yoki oddiy foydalanuvchi
-    kb = [
-        [InlineKeyboardButton("📋 Bot haqida ma'lumot", callback_data="about_bot")],
-        [InlineKeyboardButton("🆓 Bepul sinab ko'rish", callback_data="free_tests")],
-        [InlineKeyboardButton("💎 Premium olish", callback_data="buy_premium")],
-        [InlineKeyboardButton("📨 To'liq kirish so'rovi", callback_data="request_access")],
-    ]
+    # Yangi foydalanuvchi — ism so'ra
+    context.user_data["step"] = "waiting_fullname"
     await update.message.reply_text(
-        f"👋 Salom, {user.first_name}!\n\n"
-        f"Bu bot o'quv testlari va qo'llanmalar platformasi.\n\n"
-        f"📌 Quyidagilardan birini tanlang:",
+        "👋 Assalomu alaykum!\n\n"
+        "Botdan foydalanish uchun ismingiz va familiyangizni to'liq kiriting:\n\n"
+        "📝 Masalan: Aliyev Jasur"
+    )
+
+async def show_welcome_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, full_name: str = ""):
+    uid = update.effective_user.id if update.effective_user else update.callback_query.from_user.id
+    prem = is_premium(uid)
+
+    if prem:
+        header = (
+            f"👑 Xush kelibsiz, {full_name}!\n\n"
+            f"Premium: {premium_exp_str(uid)} gacha aktiv ✅"
+        )
+        kb = [
+            [InlineKeyboardButton("ℹ️ Bot haqida ma'lumot", callback_data="about_bot")],
+            [InlineKeyboardButton("⭐️ Premium versiya", callback_data="premium_menu")],
+        ]
+    else:
+        status = db.get_user_status(uid)
+        header = f"👋 Xush kelibsiz, {full_name}!"
+        kb = [
+            [InlineKeyboardButton("ℹ️ Bot haqida ma'lumot", callback_data="about_bot")],
+            [InlineKeyboardButton("🆓 Bepul versiya", callback_data="free_menu")],
+            [InlineKeyboardButton("⭐️ Premium versiya", callback_data="premium_info")],
+        ]
+
+    if hasattr(update, "callback_query") and update.callback_query:
+        await update.callback_query.edit_message_text(header, reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await update.message.reply_text(header, reply_markup=InlineKeyboardMarkup(kb))
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  BOT HAQIDA
+# ─────────────────────────────────────────────────────────────────────────────
+async def about_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    kb = [[InlineKeyboardButton("⬅️ Orqaga qaytish", callback_data="back_welcome")]]
+    await q.edit_message_text(
+        "🤖 Xush kelibsiz!\n\n"
+        "Bu bot @legistman kanaliga tegishli hisoblanadi! 📚\n\n"
+        "Bu yerda siz BMBA darajasidagi maxsus testlarni 📝 ishlashingiz\n"
+        "va natijalarni tekshirishingiz mumkin ✅\n\n"
+        "Shuningdek, maxsus o'quv qo'llanmalari 📖 bilan ham ta'minlanasiz.",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-# ═══════════════════════════════════════════
-#  MENYULAR
-# ═══════════════════════════════════════════
-async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id if update.effective_user else update.callback_query.from_user.id
-    premium = is_premium(uid)
+# ─────────────────────────────────────────────────────────────────────────────
+#  BEPUL MENYU
+# ─────────────────────────────────────────────────────────────────────────────
+async def free_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    tests = db.get_free_pdf_tests()
+    kb = []
+    if tests:
+        for t in tests:
+            kb.append([InlineKeyboardButton(f"📝 {t['title']}", callback_data=f"pdf_test_{t['id']}")])
+    else:
+        pass
+    kb.append([InlineKeyboardButton("⭐️ Premium olish", callback_data="buy_premium")])
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="back_welcome")])
+    txt = "🆓 Bepul bo'lim\n\n"
+    txt += "📝 Mavjud bepul testlar:\n" if tests else "ℹ️ Hozircha bepul testlar yo'q.\n"
+    await q.edit_message_text(txt, reply_markup=InlineKeyboardMarkup(kb))
 
-    crown = "👑 " if premium else ""
+# ─────────────────────────────────────────────────────────────────────────────
+#  PREMIUM INFO (sotib olish)
+# ─────────────────────────────────────────────────────────────────────────────
+async def premium_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    kb = [
+        [InlineKeyboardButton("💳 To'lov qilish", callback_data="buy_premium")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_welcome")],
+    ]
+    await q.edit_message_text(
+        "⭐️ Premium versiya\n\n"
+        "Premium imkoniyatlar:\n"
+        "✅ Barcha testlar\n"
+        "✅ Barcha qo'llanmalar\n"
+        "✅ Barcha video darslar\n"
+        "✅ Batafsil xato tahlili\n\n"
+        f"💰 Narx: {NARX} / 30 kun\n\n"
+        "To'lov qilish uchun quyidagi tugmani bosing 👇",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  PREMIUM MENYU (premium foydalanuvchi uchun)
+# ─────────────────────────────────────────────────────────────────────────────
+async def premium_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    uid = q.from_user.id
     kb = [
         [InlineKeyboardButton("📝 Testlar", callback_data="menu_tests")],
         [InlineKeyboardButton("📚 Qo'llanmalar", callback_data="menu_guides")],
         [InlineKeyboardButton("🎬 Video darslar", callback_data="menu_videos")],
         [InlineKeyboardButton("📊 Natijalarim", callback_data="menu_results")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_welcome")],
     ]
-    if not premium:
-        kb.append([InlineKeyboardButton("💎 Premium olish", callback_data="buy_premium")])
-
-    text = f"{crown}Asosiy menyu"
-    if premium:
-        exp = db.get_premium_expiry(uid)
-        if exp:
-            text += f"\n👑 Premium: {exp.strftime('%d.%m.%Y')} gacha"
-
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
-    else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
-
-async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    kb = [
-        [InlineKeyboardButton("📝 Testlar boshqaruvi", callback_data="admin_tests")],
-        [InlineKeyboardButton("📚 Qo'llanmalar", callback_data="admin_guides")],
-        [InlineKeyboardButton("🎬 Videolar", callback_data="admin_videos")],
-        [InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="admin_users")],
-        [InlineKeyboardButton("💎 To'lov so'rovlari", callback_data="admin_payments")],
-        [InlineKeyboardButton("📊 Statistika", callback_data="admin_stats")],
-        [InlineKeyboardButton("📢 Xabar yuborish", callback_data="admin_broadcast")],
-    ]
-    text = "🔧 Admin Panel"
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
-    else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
-
-# ═══════════════════════════════════════════
-#  BOT HAQIDA
-# ═══════════════════════════════════════════
-async def about_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    kb = [
-        [InlineKeyboardButton("🆓 Bepul sinab ko'rish", callback_data="free_tests")],
-        [InlineKeyboardButton("💎 Premium olish", callback_data="buy_premium")],
-        [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_start")],
-    ]
-    await query.edit_message_text(
-        "📌 Bot haqida\n\n"
-        "Bu platforma orqali:\n"
-        "✅ Test ishlash va natijalarni bilish\n"
-        "✅ O'quv qo'llanmalarni o'qish\n"
-        "✅ Video darslarni ko'rish\n\n"
-        "🆓 Bepul versiya:\n"
-        "• Admin belgilagan testlarni ishlash\n\n"
-        "💎 Premium versiya (349 000 so'm/oy):\n"
-        "• Barcha testlar\n"
-        "• Barcha qo'llanmalar\n"
-        "• Barcha video darslar\n"
-        "• Batafsil xato tahlili",
+    await q.edit_message_text(
+        f"⭐️ Premium bo'lim\n\n"
+        f"👑 Premium: {premium_exp_str(uid)} gacha aktiv",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-# ═══════════════════════════════════════════
-#  BEPUL TESTLAR
-# ═══════════════════════════════════════════
-async def free_tests_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    tests = db.get_free_pdf_tests()
-    if not tests:
-        kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="back_start")]]
-        await query.edit_message_text("Hozircha bepul testlar yo'q.", reply_markup=InlineKeyboardMarkup(kb))
-        return
-    kb = []
-    for t in tests:
-        kb.append([InlineKeyboardButton(f"📝 {t['title']}", callback_data=f"pdf_test_{t['id']}")])
-    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="back_start")])
-    await query.edit_message_text("🆓 Bepul testlar:", reply_markup=InlineKeyboardMarkup(kb))
-
-# ═══════════════════════════════════════════
-#  PREMIUM SOTIB OLISH
-# ═══════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
+#  TO'LOV
+# ─────────────────────────────────────────────────────────────────────────────
 async def buy_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    q = update.callback_query
+    await q.answer()
+    uid = q.from_user.id
+    if is_premium(uid):
+        await q.answer("Siz allaqachon premium foydalanuvchisiz!", show_alert=True)
+        return
     kb = [
-        [InlineKeyboardButton("✅ To'lov qildim, chek yuboraman", callback_data="send_payment_proof")],
-        [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_start")],
+        [InlineKeyboardButton("✅ Chek yuboraman", callback_data="send_payment_proof")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="premium_info")],
     ]
-    await query.edit_message_text(
-        "💎 Premium obuna\n\n"
-        f"💰 Narx: {PREMIUM_NARX} / 30 kun\n\n"
-        "💳 To'lov qilish:\n"
-        f"Karta: `{KARTA_RAQAM}`\n"
-        f"Egasi: {KARTA_EGASI}\n\n"
-        "📋 Qadamlar:\n"
-        "1. Yuqoridagi kartaga pul o'tkazing\n"
-        "2. To'lov chekini saqlang\n"
-        "3. Quyidagi tugmani bosib chekni yuboring\n"
-        "4. Admin 24 soat ichida ko'rib chiqadi\n"
-        "5. Tasdiqlangandan so'ng premium yoqiladi ✅",
+    await q.edit_message_text(
+        f"💳 To'lov ma'lumotlari\n\n"
+        f"💰 Narx: {NARX} / 30 kun\n\n"
+        f"Karta raqami:\n`{KARTA}`\n"
+        f"Karta egasi: {KARTA_EGASI}\n\n"
+        f"📋 Qadamlar:\n"
+        f"1️⃣ Yuqoridagi kartaga {NARX} o'tkering\n"
+        f"2️⃣ To'lov cheki (screenshot)ni saqlang\n"
+        f"3️⃣ Quyidagi tugmani bosib chekni yuboring\n"
+        f"4️⃣ Admin 24 soat ichida ko'rib chiqadi ✅",
         reply_markup=InlineKeyboardMarkup(kb),
         parse_mode="Markdown"
     )
 
 async def send_payment_proof(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    context.user_data["waiting_payment_proof"] = True
-    await query.edit_message_text(
+    q = update.callback_query
+    await q.answer()
+    context.user_data["step"] = "waiting_payment_proof"
+    await q.edit_message_text(
         "📸 To'lov chekini yuboring\n\n"
-        "Rasm yoki screenshot ko'rinishida yuboring.\n"
+        "Rasm yoki screenshot ko'rinishida yuboring.\n\n"
         "Bekor qilish: /start"
     )
 
 async def handle_payment_proof(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.user_data.get("waiting_payment_proof"):
+    if context.user_data.get("step") != "waiting_payment_proof":
         return False
     user = update.effective_user
     photo = update.message.photo
     document = update.message.document
-
     if not photo and not document:
         await update.message.reply_text("Iltimos rasm yoki fayl yuboring.")
         return True
-
-    context.user_data.pop("waiting_payment_proof", None)
-
-    # Foydalanuvchiga
+    context.user_data.clear()
     await update.message.reply_text(
-        "✅ To'lov cheki qabul qilindi!\n\n"
+        "✅ Chek qabul qilindi!\n\n"
         "Admin 24 soat ichida ko'rib chiqadi.\n"
-        "Tasdiqlangandan so'ng xabar olasiz."
+        "Tasdiqlangach xabar olasiz. 🙏"
     )
-
-    # Adminga
-    kb = [
-        [
-            InlineKeyboardButton("✅ Tasdiqlash (30 kun)", callback_data=f"pay_approve_{user.id}"),
-            InlineKeyboardButton("❌ Rad etish", callback_data=f"pay_reject_{user.id}"),
-        ]
-    ]
+    u = db.get_user(user.id)
+    fname = u["full_name"] if u else user.first_name
+    kb = [[
+        InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"pay_approve_{user.id}"),
+        InlineKeyboardButton("❌ Rad etish",  callback_data=f"pay_reject_{user.id}"),
+    ]]
     caption = (
         f"💎 Yangi to'lov so'rovi!\n\n"
-        f"👤 {user.first_name}\n"
+        f"👤 {fname}\n"
         f"🆔 {user.id}\n"
         f"📛 @{user.username or 'yoq'}"
     )
     if photo:
-        await context.bot.send_photo(chat_id=ADMIN_ID, photo=photo[-1].file_id, caption=caption, reply_markup=InlineKeyboardMarkup(kb))
+        await context.bot.send_photo(ADMIN_ID, photo[-1].file_id, caption=caption, reply_markup=InlineKeyboardMarkup(kb))
     else:
-        await context.bot.send_document(chat_id=ADMIN_ID, document=document.file_id, caption=caption, reply_markup=InlineKeyboardMarkup(kb))
-
+        await context.bot.send_document(ADMIN_ID, document.file_id, caption=caption, reply_markup=InlineKeyboardMarkup(kb))
     db.add_payment_request(user.id)
     return True
 
 async def payment_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if not is_admin(query.from_user.id):
-        return
-    parts = query.data.split("_")
-    action = parts[1]
-    target_id = int(parts[2])
-
+    q = update.callback_query
+    await q.answer()
+    if not is_admin(q.from_user.id): return
+    parts = q.data.split("_")
+    action, target_id = parts[1], int(parts[2])
+    old_cap = q.message.caption or q.message.text or ""
     if action == "approve":
         expiry = datetime.now() + timedelta(days=PREMIUM_KUN)
         db.set_premium(target_id, expiry)
-        await query.edit_message_caption(
-            caption=query.message.caption + f"\n\n✅ Tasdiqlandi! Premium: {expiry.strftime('%d.%m.%Y')} gacha"
-        )
+        new_cap = old_cap + f"\n\n✅ Tasdiqlandi! Premium: {expiry.strftime('%d.%m.%Y')} gacha"
+        try: await q.edit_message_caption(new_cap)
+        except: await q.edit_message_text(new_cap)
         await context.bot.send_message(
-            chat_id=target_id,
-            text=f"🎉 Premium faollashtirildi!\n\n👑 Muddat: 30 kun ({expiry.strftime('%d.%m.%Y')} gacha)\n\n/start bosing."
+            target_id,
+            f"🎉 Premium faollashtirildi!\n\n"
+            f"👑 Muddat: {expiry.strftime('%d.%m.%Y')} gacha\n\n"
+            f"/start bosib kiring."
         )
     else:
-        await query.edit_message_caption(caption=query.message.caption + "\n\n❌ Rad etildi.")
-        await context.bot.send_message(
-            chat_id=target_id,
-            text="😔 To'lovingiz tasdiqlanmadi. Muammo bo'lsa adminga murojaat qiling."
-        )
+        new_cap = old_cap + "\n\n❌ Rad etildi."
+        try: await q.edit_message_caption(new_cap)
+        except: await q.edit_message_text(new_cap)
+        await context.bot.send_message(target_id, "😔 To'lovingiz tasdiqlanmadi. Muammo bo'lsa adminga murojaat qiling.")
 
-# ═══════════════════════════════════════════
-#  KIRISH SO'ROVI
-# ═══════════════════════════════════════════
-async def request_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user = query.from_user
-    status = db.get_user_status(user.id)
-    if status == "pending":
-        await query.edit_message_text("⏳ So'rovingiz kutilmoqda.")
-        return
-    if status in ("approved", "premium"):
-        await show_main_menu(update, context)
-        return
-    db.set_user_status(user.id, "pending")
-    kb = [[
-        InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{user.id}"),
-        InlineKeyboardButton("❌ Rad etish", callback_data=f"reject_{user.id}"),
-    ]]
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"📨 Kirish so'rovi!\n\n👤 {user.first_name}\n🆔 {user.id}\n📛 @{user.username or 'yoq'}",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
-    await query.edit_message_text("✅ So'rov yuborildi! Admin tasdiqlashini kuting.")
-
-async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if not is_admin(query.from_user.id):
-        return
-    action, uid = query.data.split("_", 1)
-    target = int(uid)
-    if action == "approve":
-        db.set_user_status(target, "approved")
-        await query.edit_message_text(query.message.text + "\n\n✅ Tasdiqlandi.")
-        await context.bot.send_message(chat_id=target, text="✅ Kirish tasdiqlandi! /start bosing.")
-    else:
-        db.set_user_status(target, "rejected")
-        await query.edit_message_text(query.message.text + "\n\n❌ Rad etildi.")
-        await context.bot.send_message(chat_id=target, text="❌ So'rovingiz rad etildi.")
-
-# ═══════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 #  TESTLAR
-# ═══════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 async def menu_tests(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    uid = query.from_user.id
-
-    if is_premium(uid) or is_approved(uid):
+    q = update.callback_query
+    await q.answer()
+    uid = q.from_user.id
+    prem = is_premium(uid)
+    appr = is_approved(uid)
+    if prem or appr:
         tests = db.get_all_pdf_tests()
     else:
         tests = db.get_free_pdf_tests()
-
-    if not tests:
-        kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="back_main")]]
-        await query.edit_message_text("Testlar yo'q.", reply_markup=InlineKeyboardMarkup(kb))
-        return
-
     kb = []
     for t in tests:
-        free_tag = " 🆓" if t.get("is_free") else " 💎"
-        kb.append([InlineKeyboardButton(f"📝 {t['title']}{free_tag}", callback_data=f"pdf_test_{t['id']}")])
-    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="back_main")])
-    await query.edit_message_text("📝 Testlar:", reply_markup=InlineKeyboardMarkup(kb))
+        icon = "🆓" if t.get("is_free") else "⭐️"
+        kb.append([InlineKeyboardButton(f"{icon} {t['title']}", callback_data=f"pdf_test_{t['id']}")])
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="premium_menu" if prem else "back_welcome")])
+    await q.edit_message_text("📝 Testlar:", reply_markup=InlineKeyboardMarkup(kb) if kb else None)
 
 async def show_pdf_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    uid = query.from_user.id
-    test_id = int(query.data.split("_")[2])
+    q = update.callback_query
+    await q.answer()
+    uid = q.from_user.id
+    test_id = int(q.data.split("_")[2])
     test = db.get_pdf_test(test_id)
     if not test:
-        await query.edit_message_text("Test topilmadi.")
+        await q.edit_message_text("Test topilmadi.")
         return
-
-    # Bepul test emas va foydalanuvchi premium emas
-    if not test.get("is_free") and not is_premium(uid) and not is_approved(uid):
+    if not test.get("is_free") and not is_approved(uid):
         kb = [
-            [InlineKeyboardButton("💎 Premium olish", callback_data="buy_premium")],
-            [InlineKeyboardButton("⬅️ Orqaga", callback_data="menu_tests")],
+            [InlineKeyboardButton("⭐️ Premium olish", callback_data="buy_premium")],
+            [InlineKeyboardButton("⬅️ Orqaga", callback_data="free_menu")],
         ]
-        await query.edit_message_text("💎 Bu test faqat premium foydalanuvchilar uchun.", reply_markup=InlineKeyboardMarkup(kb))
+        await q.edit_message_text("⭐️ Bu test faqat premium foydalanuvchilar uchun.", reply_markup=InlineKeyboardMarkup(kb))
         return
-
     q_count = test.get("question_count", 30)
-    context.user_data["active_test_id"] = test_id
+    context.user_data["active_test_id"]    = test_id
     context.user_data["active_test_count"] = q_count
-
     await context.bot.send_document(
-        chat_id=query.message.chat_id,
-        document=test["file_id"],
-        caption=f"📝 {test['title']}\n\n❓ Savollar: {q_count} ta\n\nTestni yechib bo'lgach javoblaringizni yuboring."
+        q.message.chat_id,
+        test["file_id"],
+        caption=f"📝 {test['title']}\n❓ Savollar: {q_count} ta\n\nTestni yechib bo'lgach javob yuboring."
     )
     kb = [[InlineKeyboardButton("✏️ Javob yuboraman", callback_data=f"submit_test_{test_id}")]]
-    await context.bot.send_message(
-        chat_id=query.message.chat_id,
-        text="Testni yechib bo'ldingizmi?",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
+    await context.bot.send_message(q.message.chat_id, "Tayyor bo'ldingizmi?", reply_markup=InlineKeyboardMarkup(kb))
 
 async def submit_test_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    test_id = int(query.data.split("_")[2])
+    q = update.callback_query
+    await q.answer()
+    test_id = int(q.data.split("_")[2])
     test = db.get_pdf_test(test_id)
     q_count = test.get("question_count", 30) if test else 30
-    context.user_data["waiting_answers_for"] = test_id
-    context.user_data["active_test_count"] = q_count
-    await query.edit_message_text(
-        f"✏️ Javoblaringizni yuboring!\n\n"
-        f"{q_count} ta harf ketma-ket (ABCD):\n"
+    context.user_data["step"]             = "waiting_answers"
+    context.user_data["waiting_test_id"]  = test_id
+    context.user_data["waiting_test_cnt"] = q_count
+    await q.edit_message_text(
+        f"✏️ {q_count} ta javobni yuboring!\n\n"
+        f"Faqat harflar ketma-ket (bo'sh joy shart emas):\n"
         f"Masalan: ABCDABCDABCD...\n\n"
-        f"Vergul, bo'shliq shart emas."
+        f"(Jami {q_count} ta harf — A, B, C yoki D)"
     )
 
 async def handle_test_answers(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    test_id = context.user_data.get("waiting_answers_for")
-    if not test_id:
+    if context.user_data.get("step") != "waiting_answers":
         return False
-
-    q_count = context.user_data.get("active_test_count", 30)
-    text = update.message.text.strip().upper()
-    clean = re.sub(r'[^ABCD]', '', text)
-
+    uid      = update.effective_user.id
+    test_id  = context.user_data["waiting_test_id"]
+    q_count  = context.user_data["waiting_test_cnt"]
+    raw      = update.message.text.strip().upper()
+    clean    = re.sub(r"[^ABCD]", "", raw)
     if len(clean) != q_count:
         await update.message.reply_text(
-            f"⚠️ {len(clean)} ta javob yubordingiz, {q_count} ta kerak.\n\nQaytadan yuboring."
+            f"⚠️ {len(clean)} ta javob yubordingiz, {q_count} ta kerak.\n\nQaytadan yuboring:"
         )
         return True
-
-    answer_key = db.get_answer_key(test_id)
-    if not answer_key:
-        await update.message.reply_text("⚠️ Kalit hali kiritilmagan.")
+    key = re.sub(r"[^ABCD]", "", (db.get_answer_key(test_id) or "").upper())
+    if not key:
+        await update.message.reply_text("⚠️ Javob kaliti kiritilmagan. Adminga murojaat qiling.")
         return True
+    correct = sum(u == k for u, k in zip(clean, key))
+    wrong   = q_count - correct
+    pct     = round(correct / q_count * 100)
+    if pct >= 85:   baho = "🏆 Ajoyib!"
+    elif pct >= 70: baho = "👍 Yaxshi!"
+    elif pct >= 50: baho = "📚 Qoniqarli"
+    else:           baho = "💪 Ko'proq mashq kerak"
 
-    key = re.sub(r'[^ABCD]', '', answer_key.upper())
-    correct = sum(1 for u, k in zip(clean, key) if u == k)
-    wrong = q_count - correct
-    percent = round((correct / q_count) * 100)
-
-    if percent >= 85: baho = "🏆 Ajoyib!"
-    elif percent >= 70: baho = "👍 Yaxshi!"
-    elif percent >= 50: baho = "📚 Qoniqarli"
-    else: baho = "💪 Ko'proq mashq kerak"
-
-    # Xato javoblar tahlili
-    wrong_details = []
-    for i, (u, k) in enumerate(zip(clean, key)):
-        if u != k:
-            wrong_details.append(f"  {i+1}-savol: Siz {u} ✗  →  To'g'ri: {k} ✓")
-
+    wrong_lines = [
+        f"  {i+1}-savol: Siz {u} ✗  →  To'g'ri: {k} ✓"
+        for i, (u, k) in enumerate(zip(clean, key)) if u != k
+    ]
     result = (
-        f"📊 Natija: {test_id and db.get_pdf_test(test_id) and db.get_pdf_test(test_id).get('title','')}\n"
-        f"{'─'*25}\n"
+        f"📊 Natija\n{'─'*24}\n"
         f"✅ To'g'ri: {correct}/{q_count}\n"
         f"❌ Xato:   {wrong}/{q_count}\n"
-        f"📈 Foiz:   {percent}%\n"
+        f"📈 Foiz:   {pct}%\n"
         f"🎯 Baho:   {baho}\n"
     )
-
-    if wrong_details:
+    if wrong_lines:
         result += f"\n❌ Xato javoblar ({wrong} ta):\n"
-        result += "\n".join(wrong_details[:20])
-        if wrong > 20:
-            result += f"\n  ... va yana {wrong-20} ta xato"
+        result += "\n".join(wrong_lines[:25])
+        if wrong > 25:
+            result += f"\n  ... va yana {wrong-25} ta xato"
 
     db.save_pdf_result(uid, test_id, correct, q_count, clean)
-    context.user_data.pop("waiting_answers_for", None)
-    context.user_data.pop("active_test_count", None)
-
+    context.user_data.clear()
+    prem = is_premium(uid)
     kb = [
         [InlineKeyboardButton("📝 Yana test", callback_data="menu_tests")],
-        [InlineKeyboardButton("🏠 Asosiy menyu", callback_data="back_main")],
+        [InlineKeyboardButton("🏠 Bosh menyu", callback_data="back_welcome")],
     ]
     await update.message.reply_text(result, reply_markup=InlineKeyboardMarkup(kb))
     return True
 
-# ═══════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 #  QO'LLANMALAR
-# ═══════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 async def menu_guides(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    uid = query.from_user.id
-    if not is_approved(uid) and not is_premium(uid):
-        kb = [[InlineKeyboardButton("💎 Premium olish", callback_data="buy_premium"), InlineKeyboardButton("⬅️ Orqaga", callback_data="back_main")]]
-        await query.edit_message_text("💎 Qo'llanmalar faqat premium uchun.", reply_markup=InlineKeyboardMarkup(kb))
+    q = update.callback_query
+    await q.answer()
+    if not is_approved(q.from_user.id):
+        kb = [[InlineKeyboardButton("⭐️ Premium olish", callback_data="buy_premium"), InlineKeyboardButton("⬅️ Orqaga", callback_data="premium_menu")]]
+        await q.edit_message_text("⭐️ Qo'llanmalar faqat premium uchun.", reply_markup=InlineKeyboardMarkup(kb))
         return
     guides = db.get_all_guides()
     if not guides:
-        kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="back_main")]]
-        await query.edit_message_text("Hozircha qo'llanmalar yo'q.", reply_markup=InlineKeyboardMarkup(kb))
+        kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="premium_menu")]]
+        await q.edit_message_text("Hozircha qo'llanmalar yo'q.", reply_markup=InlineKeyboardMarkup(kb))
         return
     kb = [[InlineKeyboardButton(f"📖 {g['title']}", callback_data=f"guide_{g['id']}")] for g in guides]
-    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="back_main")])
-    await query.edit_message_text("📚 Qo'llanmalar:", reply_markup=InlineKeyboardMarkup(kb))
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="premium_menu")])
+    await q.edit_message_text("📚 Qo'llanmalar:", reply_markup=InlineKeyboardMarkup(kb))
 
 async def show_guide(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    guide = db.get_guide(int(query.data.split("_")[1]))
-    if not guide:
-        return
+    q = update.callback_query
+    await q.answer()
+    guide = db.get_guide(int(q.data.split("_")[1]))
+    if not guide: return
     kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="menu_guides")]]
-    await query.edit_message_text(f"📖 {guide['title']}\n\n{guide['content']}"[:4000], reply_markup=InlineKeyboardMarkup(kb))
+    await q.edit_message_text(f"📖 {guide['title']}\n\n{guide['content']}"[:4000], reply_markup=InlineKeyboardMarkup(kb))
 
-# ═══════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 #  VIDEOLAR
-# ═══════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 async def menu_videos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    uid = query.from_user.id
-    if not is_approved(uid) and not is_premium(uid):
-        kb = [[InlineKeyboardButton("💎 Premium olish", callback_data="buy_premium"), InlineKeyboardButton("⬅️ Orqaga", callback_data="back_main")]]
-        await query.edit_message_text("💎 Videolar faqat premium uchun.", reply_markup=InlineKeyboardMarkup(kb))
+    q = update.callback_query
+    await q.answer()
+    if not is_approved(q.from_user.id):
+        kb = [[InlineKeyboardButton("⭐️ Premium olish", callback_data="buy_premium"), InlineKeyboardButton("⬅️ Orqaga", callback_data="premium_menu")]]
+        await q.edit_message_text("⭐️ Videolar faqat premium uchun.", reply_markup=InlineKeyboardMarkup(kb))
         return
     videos = db.get_all_videos()
     if not videos:
-        kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="back_main")]]
-        await query.edit_message_text("Hozircha videolar yo'q.", reply_markup=InlineKeyboardMarkup(kb))
+        kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="premium_menu")]]
+        await q.edit_message_text("Hozircha videolar yo'q.", reply_markup=InlineKeyboardMarkup(kb))
         return
     kb = [[InlineKeyboardButton(f"▶️ {v['title']}", callback_data=f"video_{v['id']}")] for v in videos]
-    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="back_main")])
-    await query.edit_message_text("🎬 Video darslar:", reply_markup=InlineKeyboardMarkup(kb))
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="premium_menu")])
+    await q.edit_message_text("🎬 Video darslar:", reply_markup=InlineKeyboardMarkup(kb))
 
 async def show_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    video = db.get_video(int(query.data.split("_")[1]))
-    if not video:
-        return
+    q = update.callback_query
+    await q.answer()
+    v = db.get_video(int(q.data.split("_")[1]))
+    if not v: return
     kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="menu_videos")]]
-    await query.edit_message_text(f"🎬 {video['title']}\n\n{video['description']}\n\n🔗 {video['url']}", reply_markup=InlineKeyboardMarkup(kb))
+    await q.edit_message_text(f"🎬 {v['title']}\n\n{v['description']}\n\n🔗 {v['url']}", reply_markup=InlineKeyboardMarkup(kb))
 
-# ═══════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 #  NATIJALAR
-# ═══════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 async def menu_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    results = db.get_user_pdf_results(query.from_user.id)
-    kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="back_main")]]
+    q = update.callback_query
+    await q.answer()
+    results = db.get_user_pdf_results(q.from_user.id)
+    kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="premium_menu")]]
     if not results:
-        await query.edit_message_text("Hali test yechmagansiz.", reply_markup=InlineKeyboardMarkup(kb))
+        await q.edit_message_text("Hali test yechmagansiz.", reply_markup=InlineKeyboardMarkup(kb))
         return
     text = "📊 Natijalaringiz:\n\n"
-    for r in results:
-        pct = round(r['correct']/r['total']*100) if r['total'] else 0
+    for r in results[:20]:
+        pct = round(r["correct"]/r["total"]*100) if r["total"] else 0
         text += f"📝 {r['test_title']}: {r['correct']}/{r['total']} ({pct}%)\n"
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
-# ═══════════════════════════════════════════
-#  ADMIN: TESTLAR BOSHQARUVI
-# ═══════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
+#  ADMIN PANEL
+# ─────────────────────────────────────────────────────────────────────────────
+async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    kb = [
+        [InlineKeyboardButton("📝 Testlar",            callback_data="admin_tests")],
+        [InlineKeyboardButton("📚 Qo'llanmalar",       callback_data="admin_guides")],
+        [InlineKeyboardButton("🎬 Videolar",            callback_data="admin_videos")],
+        [InlineKeyboardButton("👥 Foydalanuvchilar",   callback_data="admin_users")],
+        [InlineKeyboardButton("💎 To'lov so'rovlari",  callback_data="admin_payments")],
+        [InlineKeyboardButton("📊 Statistika",         callback_data="admin_stats")],
+        [InlineKeyboardButton("📢 Xabar yuborish",     callback_data="admin_broadcast")],
+    ]
+    msg = "🔧 Admin Panel"
+    if update.callback_query:
+        await update.callback_query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(kb))
+
+async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    context.user_data.clear()
+    await show_admin_menu(update, context)
+
+# ─── TESTLAR BOSHQARUVI ──────────────────────────────────────────────────────
 async def admin_tests(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    q = update.callback_query
+    await q.answer()
     tests = db.get_all_pdf_tests()
     kb = [[InlineKeyboardButton("➕ Yangi test qo'shish", callback_data="admin_add_pdf")]]
     for t in tests:
-        free = "🆓" if t.get("is_free") else "💎"
-        kb.append([
-            InlineKeyboardButton(f"{free} {t['title']}", callback_data=f"admin_test_view_{t['id']}"),
-        ])
+        icon = "🆓" if t.get("is_free") else "⭐️"
+        kb.append([InlineKeyboardButton(f"{icon} {t['title']}", callback_data=f"atv_{t['id']}")])
     kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")])
-    await query.edit_message_text("📝 Testlar boshqaruvi:", reply_markup=InlineKeyboardMarkup(kb))
+    await q.edit_message_text("📝 Testlar boshqaruvi:", reply_markup=InlineKeyboardMarkup(kb))
 
 async def admin_test_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    test_id = int(query.data.split("_")[3])
-    test = db.get_pdf_test(test_id)
-    if not test:
-        return
+    q = update.callback_query
+    await q.answer()
+    test_id = int(q.data.split("_")[1])
+    test    = db.get_pdf_test(test_id)
+    if not test: return
     results = db.get_test_results(test_id)
-    free = "🆓 Bepul" if test.get("is_free") else "💎 Premium"
+    icon    = "🆓 Bepul" if test.get("is_free") else "⭐️ Premium"
+    toggle  = "⭐️ Premiumga o'tkazish" if test.get("is_free") else "🆓 Bepulga o'tkazish"
     text = (
-        f"📝 {test['title']}\n"
-        f"{'─'*20}\n"
+        f"📝 {test['title']}\n{'─'*22}\n"
         f"❓ Savollar: {test['question_count']} ta\n"
         f"🔑 Kalit: {test['answer_key']}\n"
-        f"📌 Turi: {free}\n"
-        f"👥 Yechganlar: {len(results)} ta\n"
+        f"📌 Turi: {icon}\n"
+        f"👥 Yechganlar: {len(results)} ta"
     )
-    is_free = test.get("is_free", 0)
-    toggle_text = "💎 Premiumga o'tkazish" if is_free else "🆓 Bepulga o'tkazish"
     kb = [
-        [InlineKeyboardButton(toggle_text, callback_data=f"admin_test_toggle_{test_id}")],
-        [InlineKeyboardButton("📊 Natijalar", callback_data=f"admin_test_results_{test_id}")],
-        [InlineKeyboardButton("🗑 O'chirish", callback_data=f"admin_test_delete_{test_id}")],
-        [InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_tests")],
+        [InlineKeyboardButton(toggle,                   callback_data=f"att_{test_id}")],
+        [InlineKeyboardButton("🔑 Kalitni yangilash",   callback_data=f"atk_{test_id}")],
+        [InlineKeyboardButton("📊 Natijalar",           callback_data=f"atr_{test_id}")],
+        [InlineKeyboardButton("🗑 O'chirish",           callback_data=f"atd_{test_id}")],
+        [InlineKeyboardButton("⬅️ Orqaga",             callback_data="admin_tests")],
     ]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
-
-async def admin_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    test_id = int(query.data.split("_")[3])
-    results = db.get_test_results(test_id)
-    test = db.get_pdf_test(test_id)
-    if not results:
-        kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data=f"admin_test_view_{test_id}")]]
-        await query.edit_message_text("Hali hech kim yechmagan.", reply_markup=InlineKeyboardMarkup(kb))
-        return
-    text = f"📊 {test['title']} — natijalar:\n\n"
-    for r in results[:20]:
-        pct = round(r['correct']/r['total']*100)
-        text += f"👤 {r['first_name']}: {r['correct']}/{r['total']} ({pct}%)\n"
-    kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data=f"admin_test_view_{test_id}")]]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
 async def admin_test_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    test_id = int(query.data.split("_")[3])
+    q = update.callback_query; await q.answer()
+    test_id = int(q.data.split("_")[1])
     test = db.get_pdf_test(test_id)
-    new_val = 0 if test.get("is_free") else 1
-    db.set_test_free(test_id, new_val)
+    db.set_test_free(test_id, 0 if test.get("is_free") else 1)
+    q.data = f"atv_{test_id}"
     await admin_test_view(update, context)
 
+async def admin_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    test_id = int(q.data.split("_")[1])
+    results = db.get_test_results(test_id)
+    test    = db.get_pdf_test(test_id)
+    kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data=f"atv_{test_id}")]]
+    if not results:
+        await q.edit_message_text("Hali hech kim yechmagan.", reply_markup=InlineKeyboardMarkup(kb))
+        return
+    text = f"📊 {test['title']}:\n\n"
+    for r in results[:20]:
+        pct = round(r["correct"]/r["total"]*100)
+        text += f"👤 {r['first_name']}: {r['correct']}/{r['total']} ({pct}%)\n"
+    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+
 async def admin_test_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    test_id = int(query.data.split("_")[3])
+    q = update.callback_query; await q.answer()
+    test_id = int(q.data.split("_")[1])
+    test = db.get_pdf_test(test_id)
     kb = [
-        [InlineKeyboardButton("✅ Ha, o'chirish", callback_data=f"admin_test_delete_confirm_{test_id}")],
-        [InlineKeyboardButton("❌ Yo'q", callback_data=f"admin_test_view_{test_id}")],
+        [InlineKeyboardButton("✅ Ha, o'chirish",  callback_data=f"atdc_{test_id}")],
+        [InlineKeyboardButton("❌ Bekor qilish",   callback_data=f"atv_{test_id}")],
     ]
-    await query.edit_message_text("Testni o'chirishni tasdiqlaysizmi?", reply_markup=InlineKeyboardMarkup(kb))
+    await q.edit_message_text(
+        f"⚠️ '{test['title']}' ni o'chirishni tasdiqlaysizmi?\n\nBu amalni qaytarib bo'lmaydi!",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
 
 async def admin_test_delete_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    test_id = int(query.data.split("_")[4])
+    q = update.callback_query; await q.answer()
+    test_id = int(q.data.split("_")[1])
     db.delete_pdf_test(test_id)
+    await q.answer("✅ Test o'chirildi!", show_alert=True)
     await admin_tests(update, context)
 
-# ═══════════════════════════════════════════
-#  ADMIN: FOYDALANUVCHILAR
-# ═══════════════════════════════════════════
+async def admin_test_newkey(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    test_id = int(q.data.split("_")[1])
+    test = db.get_pdf_test(test_id)
+    context.user_data["step"]         = "update_answer_key"
+    context.user_data["key_test_id"]  = test_id
+    context.user_data["key_count"]    = test.get("question_count", 30)
+    await q.edit_message_text(
+        f"🔑 Yangi kalit kiriting:\n\n"
+        f"Test: {test['title']}\n"
+        f"Savollar: {test['question_count']} ta\n\n"
+        f"{test['question_count']} ta harf (ABCD):\n"
+        f"Masalan: ABCDABCD...\n\nBekor: /admin"
+    )
+
+# ─── FOYDALANUVCHILAR BOSHQARUVI ─────────────────────────────────────────────
 async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    q = update.callback_query; await q.answer()
     kb = [
-        [InlineKeyboardButton("👥 Barchasi", callback_data="admin_users_all")],
-        [InlineKeyboardButton("✅ Tasdiqlangan", callback_data="admin_users_approved")],
-        [InlineKeyboardButton("👑 Premium", callback_data="admin_users_premium")],
-        [InlineKeyboardButton("⏳ Kutayotgan", callback_data="admin_users_pending")],
-        [InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")],
+        [InlineKeyboardButton("👥 Barchasi",       callback_data="aul_all")],
+        [InlineKeyboardButton("✅ Tasdiqlangan",   callback_data="aul_approved")],
+        [InlineKeyboardButton("⭐️ Premium",        callback_data="aul_premium")],
+        [InlineKeyboardButton("⏳ Kutayotgan",     callback_data="aul_pending")],
+        [InlineKeyboardButton("⬅️ Orqaga",        callback_data="admin_back")],
     ]
-    await query.edit_message_text("👥 Foydalanuvchilar:", reply_markup=InlineKeyboardMarkup(kb))
+    await q.edit_message_text("👥 Foydalanuvchilar:", reply_markup=InlineKeyboardMarkup(kb))
 
 async def admin_users_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    filter_type = query.data.split("_")[2]
-    users = db.get_users_by_status(filter_type if filter_type != "all" else None)
-    text = f"👥 Foydalanuvchilar ({len(users)} ta):\n\n"
-    kb_users = []
-    for u in users[:20]:
-        status_icon = {"approved":"✅","premium":"👑","pending":"⏳","rejected":"❌","new":"🆕"}.get(u['status'],"👤")
-        text += f"{status_icon} {u['first_name']} — {u['status']}\n"
-        kb_users.append([InlineKeyboardButton(f"{status_icon} {u['first_name']}", callback_data=f"admin_user_{u['user_id']}")])
-    kb_users.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_users")])
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb_users))
+    q = update.callback_query; await q.answer()
+    ftype = q.data.split("_")[1]
+    users = db.get_users_by_status(None if ftype == "all" else ftype)
+    icons = {"approved":"✅","premium":"⭐️","pending":"⏳","rejected":"❌","new":"🆕"}
+    kb = []
+    for u in users[:25]:
+        ico = icons.get(u["status"], "👤")
+        kb.append([InlineKeyboardButton(f"{ico} {u['full_name'] or u['first_name']}", callback_data=f"aud_{u['user_id']}")])
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_users")])
+    text = f"👥 {ftype.capitalize()} ({len(users)} ta):"
+    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
 async def admin_user_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    target_id = int(query.data.split("_")[2])
-    user = db.get_user(target_id)
-    if not user:
-        return
-    status = user['status']
-    exp = db.get_premium_expiry(target_id)
+    q = update.callback_query; await q.answer()
+    tid = int(q.data.split("_")[1])
+    u = db.get_user(tid)
+    if not u: return
+    exp = db.get_premium_expiry(tid)
     text = (
-        f"👤 {user['first_name']}\n"
-        f"🆔 {user['user_id']}\n"
-        f"📛 @{user['username'] or 'yoq'}\n"
-        f"📌 Status: {status}\n"
+        f"👤 {u['full_name'] or u['first_name']}\n"
+        f"🆔 {u['user_id']}\n"
+        f"📛 @{u['username'] or 'yoq'}\n"
+        f"📌 Status: {u['status']}\n"
     )
-    if exp:
-        text += f"👑 Premium: {exp.strftime('%d.%m.%Y')} gacha\n"
-
+    if exp: text += f"⭐️ Premium: {exp.strftime('%d.%m.%Y')} gacha\n"
     kb = []
-    if status != "approved":
-        kb.append([InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"admin_user_approve_{target_id}")])
-    if status != "premium":
-        kb.append([InlineKeyboardButton("👑 Premium berish (30 kun)", callback_data=f"admin_user_premium_{target_id}")])
-    if status != "rejected":
-        kb.append([InlineKeyboardButton("❌ Chiqarib yuborish", callback_data=f"admin_user_kick_{target_id}")])
-    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_users_all")])
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+    if u["status"] != "approved":
+        kb.append([InlineKeyboardButton("✅ Tasdiqlash",           callback_data=f"aua_approve_{tid}")])
+    if u["status"] != "premium":
+        kb.append([InlineKeyboardButton("⭐️ Premium berish (30 kun)", callback_data=f"aua_premium_{tid}")])
+    if u["status"] not in ("rejected","new"):
+        kb.append([InlineKeyboardButton("🚫 Chiqarib yuborish",   callback_data=f"aua_kick_{tid}")])
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="aul_all")])
+    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
 async def admin_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    parts = query.data.split("_")
-    action = parts[3]
-    target_id = int(parts[4])
-
+    q = update.callback_query; await q.answer()
+    _, action, tid = q.data.split("_", 2)
+    tid = int(tid)
     if action == "approve":
-        db.set_user_status(target_id, "approved")
-        await context.bot.send_message(chat_id=target_id, text="✅ Kirish tasdiqlandi! /start bosing.")
-        await query.answer("✅ Tasdiqlandi!", show_alert=True)
+        db.set_user_status(tid, "approved")
+        await context.bot.send_message(tid, "✅ Botdan foydalanishga ruxsat berildi! /start bosing.")
+        await q.answer("✅ Tasdiqlandi!", show_alert=True)
     elif action == "premium":
-        expiry = datetime.now() + timedelta(days=PREMIUM_KUN)
-        db.set_premium(target_id, expiry)
-        await context.bot.send_message(chat_id=target_id, text=f"👑 Premium berildi! {expiry.strftime('%d.%m.%Y')} gacha. /start bosing.")
-        await query.answer("👑 Premium berildi!", show_alert=True)
+        exp = datetime.now() + timedelta(days=PREMIUM_KUN)
+        db.set_premium(tid, exp)
+        await context.bot.send_message(tid, f"⭐️ Premium berildi! {exp.strftime('%d.%m.%Y')} gacha. /start bosing.")
+        await q.answer("⭐️ Premium berildi!", show_alert=True)
     elif action == "kick":
-        db.set_user_status(target_id, "rejected")
-        await context.bot.send_message(chat_id=target_id, text="❌ Botdan foydalanish huquqingiz bekor qilindi.")
-        await query.answer("❌ Chiqarib yuborildi!", show_alert=True)
-
-    # Yangilangan profilni ko'rsatish
-    context.user_data["_refresh"] = True
-    query.data = f"admin_user_{target_id}"
+        db.set_user_status(tid, "rejected")
+        await context.bot.send_message(tid, "🚫 Botdan foydalanish huquqingiz bekor qilindi.")
+        await q.answer("🚫 Chiqarib yuborildi!", show_alert=True)
+    q.data = f"aud_{tid}"
     await admin_user_detail(update, context)
 
-# ═══════════════════════════════════════════
-#  ADMIN: TO'LOV SO'ROVLARI
-# ═══════════════════════════════════════════
+# ─── TO'LOV SO'ROVLARI ───────────────────────────────────────────────────────
 async def admin_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    q = update.callback_query; await q.answer()
     payments = db.get_pending_payments()
     if not payments:
         kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]]
-        await query.edit_message_text("Hozircha kutayotgan to'lovlar yo'q.", reply_markup=InlineKeyboardMarkup(kb))
+        await q.edit_message_text("Hozircha kutayotgan to'lovlar yo'q. ✅", reply_markup=InlineKeyboardMarkup(kb))
         return
-    text = f"💎 To'lov so'rovlari: {len(payments)} ta\n\nKo'rish uchun foydalanuvchini tanlang:"
-    kb = []
-    for p in payments:
-        kb.append([InlineKeyboardButton(f"💳 {p['first_name']}", callback_data=f"admin_user_{p['user_id']}")])
+    kb = [[InlineKeyboardButton(f"💳 {p['full_name'] or p['first_name']}", callback_data=f"aud_{p['user_id']}")] for p in payments]
     kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")])
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+    await q.edit_message_text(f"💎 Kutayotgan to'lovlar: {len(payments)} ta", reply_markup=InlineKeyboardMarkup(kb))
 
-# ═══════════════════════════════════════════
-#  ADMIN: CONTENT QO'SHISH
-# ═══════════════════════════════════════════
-async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if not is_admin(query.from_user.id):
+# ─── STATISTIKA ──────────────────────────────────────────────────────────────
+async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    s = db.get_stats()
+    kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]]
+    await q.edit_message_text(
+        f"📊 Statistika:\n\n"
+        f"👥 Jami foydalanuvchilar: {s['total_users']}\n"
+        f"✅ Tasdiqlangan: {s['approved_users']}\n"
+        f"⭐️ Premium: {s['premium_users']}\n"
+        f"⏳ Kutayotgan: {s['pending_users']}\n"
+        f"📝 Testlar: {s['total_pdf_tests']}\n"
+        f"📚 Qo'llanmalar: {s['total_guides']}\n"
+        f"🎬 Videolar: {s['total_videos']}\n"
+        f"🏆 Jami natijalar: {s['total_results']}",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+# ─── BROADCAST ───────────────────────────────────────────────────────────────
+async def admin_broadcast_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    context.user_data["step"] = "broadcast"
+    await q.edit_message_text("📢 Xabar matnini yozing (barcha foydalanuvchilarga):\n\nBekor: /admin")
+
+# ─── CONTENT QO'SHISH ────────────────────────────────────────────────────────
+async def admin_add_pdf_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    context.user_data["step"] = "pdf_title"
+    await q.edit_message_text("📝 Yangi test nomi:\n(Masalan: Ona tili — 1-variant)\n\nBekor: /admin")
+
+async def admin_guides_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    guides = db.get_all_guides()
+    kb = [[InlineKeyboardButton("➕ Qo'shish", callback_data="admin_add_guide")]]
+    for g in guides:
+        kb.append([InlineKeyboardButton(f"🗑 {g['title']}", callback_data=f"agd_{g['id']}")])
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")])
+    await q.edit_message_text("📚 Qo'llanmalar:", reply_markup=InlineKeyboardMarkup(kb))
+
+async def admin_videos_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    videos = db.get_all_videos()
+    kb = [[InlineKeyboardButton("➕ Qo'shish", callback_data="admin_add_video")]]
+    for v in videos:
+        kb.append([InlineKeyboardButton(f"🗑 {v['title']}", callback_data=f"avd_{v['id']}")])
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")])
+    await q.edit_message_text("🎬 Videolar:", reply_markup=InlineKeyboardMarkup(kb))
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  MATN XABARLARI — ASOSIY HANDLER
+# ─────────────────────────────────────────────────────────────────────────────
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid  = update.effective_user.id
+    step = context.user_data.get("step", "")
+
+    # ── Yangi foydalanuvchi ism-familiya ──
+    if step == "waiting_fullname":
+        full_name = update.message.text.strip()
+        if len(full_name.split()) < 2:
+            await update.message.reply_text("Iltimos, to'liq ism va familiyangizni kiriting.\nMasalan: Aliyev Jasur")
+            return
+        db.add_user(uid, update.effective_user.username or "", update.effective_user.first_name, full_name)
+        context.user_data.clear()
+        await show_welcome_menu(update, context, full_name)
         return
-    data = query.data
 
-    if data == "admin_add_pdf":
-        context.user_data["admin_action"] = "waiting_pdf_title"
-        await query.edit_message_text("📝 Test nomini yozing:\n(Masalan: Ona tili — 1-variant)\n\nBekor: /admin")
-
-    elif data == "admin_guides":
-        guides = db.get_all_guides()
-        kb = [[InlineKeyboardButton("➕ Qo'shish", callback_data="admin_add_guide")]]
-        for g in guides:
-            kb.append([InlineKeyboardButton(f"📖 {g['title']}", callback_data=f"admin_guide_del_{g['id']}")])
-        kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")])
-        await query.edit_message_text("📚 Qo'llanmalar:", reply_markup=InlineKeyboardMarkup(kb))
-
-    elif data == "admin_add_guide":
-        context.user_data["admin_action"] = "add_guide_title"
-        await query.edit_message_text("📚 Qo'llanma sarlavhasini yozing:")
-
-    elif data.startswith("admin_guide_del_"):
-        guide_id = int(data.split("_")[3])
-        db.delete_guide(guide_id)
-        await query.answer("O'chirildi!", show_alert=True)
-        query.data = "admin_guides"
-        await admin_callback(update, context)
-
-    elif data == "admin_videos":
-        videos = db.get_all_videos()
-        kb = [[InlineKeyboardButton("➕ Qo'shish", callback_data="admin_add_video")]]
-        for v in videos:
-            kb.append([InlineKeyboardButton(f"▶️ {v['title']}", callback_data=f"admin_video_del_{v['id']}")])
-        kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")])
-        await query.edit_message_text("🎬 Videolar:", reply_markup=InlineKeyboardMarkup(kb))
-
-    elif data == "admin_add_video":
-        context.user_data["admin_action"] = "add_video_title"
-        await query.edit_message_text("🎬 Video sarlavhasini yozing:")
-
-    elif data.startswith("admin_video_del_"):
-        video_id = int(data.split("_")[3])
-        db.delete_video(video_id)
-        await query.answer("O'chirildi!", show_alert=True)
-        query.data = "admin_videos"
-        await admin_callback(update, context)
-
-    elif data == "admin_stats":
-        s = db.get_stats()
-        await query.edit_message_text(
-            f"📊 Statistika:\n\n"
-            f"👥 Jami: {s['total_users']}\n"
-            f"✅ Tasdiqlangan: {s['approved_users']}\n"
-            f"👑 Premium: {s['premium_users']}\n"
-            f"⏳ Kutayotgan: {s['pending_users']}\n"
-            f"📝 Testlar: {s['total_pdf_tests']}\n"
-            f"📚 Qo'llanmalar: {s['total_guides']}\n"
-            f"🎬 Videolar: {s['total_videos']}\n"
-            f"🏆 Jami natijalar: {s['total_results']}",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]])
-        )
-
-    elif data == "admin_broadcast":
-        context.user_data["admin_action"] = "broadcast_message"
-        await query.edit_message_text("📢 Xabar matnini yozing (barcha tasdiqlangan foydalanuvchilarga yuboriladi):\n\nBekor: /admin")
-
-    elif data == "admin_back":
-        await show_admin_menu(update, context)
-
-async def handle_pdf_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
+    # ── To'lov cheki ──
+    if step == "waiting_payment_proof":
+        await handle_payment_proof(update, context)
         return
-    if context.user_data.get("admin_action") != "waiting_pdf_file":
-        return
-    file_id = update.message.document.file_id
-    context.user_data["new_pdf_file_id"] = file_id
-    context.user_data["admin_action"] = "waiting_pdf_key"
-    count = context.user_data.get("new_pdf_count", 30)
-    await update.message.reply_text(f"✅ PDF qabul qilindi!\n\nEndi {count} ta javob kalitini yozing:\nMasalan: ABCDABCD... ({count} ta harf)")
 
-async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        return False
-    action = context.user_data.get("admin_action", "")
+    # ── Test javoblari ──
+    if step == "waiting_answers":
+        await handle_test_answers(update, context)
+        return
+
+    # ── Admin amallar ──
+    if not is_admin(uid): return
     text = update.message.text.strip() if update.message and update.message.text else ""
 
-    if action == "waiting_pdf_title":
-        context.user_data["new_pdf_title"] = text
-        context.user_data["admin_action"] = "waiting_pdf_count"
+    if step == "pdf_title":
+        context.user_data["pdf_title"] = text
+        context.user_data["step"] = "pdf_count"
         await update.message.reply_text(f"✅ Nom: {text}\n\nNechta savol? (Masalan: 30)")
 
-    elif action == "waiting_pdf_count":
+    elif step == "pdf_count":
         try:
             count = int(text)
-            context.user_data["new_pdf_count"] = count
-            context.user_data["admin_action"] = "waiting_pdf_is_free"
+            context.user_data["pdf_count"] = count
+            context.user_data["step"] = "pdf_type"
             kb = [
-                [InlineKeyboardButton("🆓 Bepul", callback_data="pdf_type_free")],
-                [InlineKeyboardButton("💎 Premium", callback_data="pdf_type_premium")],
+                [InlineKeyboardButton("🆓 Bepul",    callback_data="pdf_type_free")],
+                [InlineKeyboardButton("⭐️ Premium", callback_data="pdf_type_premium")],
             ]
             await update.message.reply_text(f"Savollar: {count} ta\n\nTest turi:", reply_markup=InlineKeyboardMarkup(kb))
         except:
             await update.message.reply_text("Faqat raqam yozing. Masalan: 30")
 
-    elif action == "waiting_pdf_key":
-        title = context.user_data.get("new_pdf_title", "")
-        count = context.user_data.get("new_pdf_count", 30)
-        file_id = context.user_data.get("new_pdf_file_id", "")
-        is_free = context.user_data.get("new_pdf_is_free", 0)
-        clean_key = re.sub(r'[^ABCD]', '', text.upper().replace(" ", "").replace(",", ""))
-        if len(clean_key) != count:
-            await update.message.reply_text(f"⚠️ {len(clean_key)} ta harf, {count} ta kerak. Qaytadan:")
-            return True
-        db.add_pdf_test(title, file_id, count, clean_key, is_free)
-        context.user_data.clear()
-        free_text = "🆓 Bepul" if is_free else "💎 Premium"
-        await update.message.reply_text(f"✅ Test qo'shildi!\n📝 {title}\n❓ {count} savol\n{free_text}\n\n/admin")
+    elif step == "waiting_pdf_file":
+        await update.message.reply_text("Iltimos PDF faylni yuboring.")
 
-    elif action == "add_guide_title":
-        context.user_data["new_guide_title"] = text
-        context.user_data["admin_action"] = "add_guide_content"
+    elif step == "pdf_key":
+        count    = context.user_data.get("pdf_count", 30)
+        file_id  = context.user_data.get("pdf_file_id", "")
+        title    = context.user_data.get("pdf_title", "")
+        is_free  = context.user_data.get("pdf_is_free", 0)
+        clean    = re.sub(r"[^ABCD]", "", text.upper())
+        if len(clean) != count:
+            await update.message.reply_text(f"⚠️ {len(clean)} ta harf, {count} ta kerak. Qaytadan:")
+            return
+        db.add_pdf_test(title, file_id, count, clean, is_free)
+        context.user_data.clear()
+        await update.message.reply_text(
+            f"✅ Test qo'shildi!\n📝 {title}\n❓ {count} savol\n"
+            f"{'🆓 Bepul' if is_free else '⭐️ Premium'}\n\n/admin"
+        )
+
+    elif step == "update_answer_key":
+        test_id = context.user_data.get("key_test_id")
+        count   = context.user_data.get("key_count", 30)
+        clean   = re.sub(r"[^ABCD]", "", text.upper())
+        if len(clean) != count:
+            await update.message.reply_text(f"⚠️ {len(clean)} ta harf, {count} ta kerak. Qaytadan:")
+            return
+        db.update_answer_key(test_id, clean)
+        context.user_data.clear()
+        await update.message.reply_text(f"✅ Kalit yangilandi: {clean}\n\n/admin")
+
+    elif step == "add_guide_title":
+        context.user_data["guide_title"] = text
+        context.user_data["step"] = "add_guide_content"
         await update.message.reply_text("Qo'llanma matnini yozing:")
 
-    elif action == "add_guide_content":
-        db.add_guide(context.user_data.get("new_guide_title", ""), text)
+    elif step == "add_guide_content":
+        db.add_guide(context.user_data.get("guide_title",""), text)
         context.user_data.clear()
         await update.message.reply_text("✅ Qo'llanma qo'shildi! /admin")
 
-    elif action == "add_video_title":
-        context.user_data["new_video_title"] = text
-        context.user_data["admin_action"] = "add_video_desc"
+    elif step == "add_video_title":
+        context.user_data["video_title"] = text
+        context.user_data["step"] = "add_video_desc"
         await update.message.reply_text("Video tavsifini yozing:")
 
-    elif action == "add_video_desc":
-        context.user_data["new_video_desc"] = text
-        context.user_data["admin_action"] = "add_video_url"
+    elif step == "add_video_desc":
+        context.user_data["video_desc"] = text
+        context.user_data["step"] = "add_video_url"
         await update.message.reply_text("Video havolasini yozing (YouTube link):")
 
-    elif action == "add_video_url":
-        db.add_video(context.user_data.get("new_video_title", ""), context.user_data.get("new_video_desc", ""), text)
+    elif step == "add_video_url":
+        db.add_video(context.user_data.get("video_title",""), context.user_data.get("video_desc",""), text)
         context.user_data.clear()
         await update.message.reply_text("✅ Video qo'shildi! /admin")
 
-    elif action == "broadcast_message":
-        users = db.get_users_by_status("approved") + db.get_users_by_status("premium")
+    elif step == "broadcast":
+        users = db.get_all_users()
         sent = 0
         for u in users:
-            try:
-                await context.bot.send_message(chat_id=u['user_id'], text=f"📢 Xabar:\n\n{text}")
-                sent += 1
-            except:
-                pass
+            if u["status"] in ("approved","premium"):
+                try:
+                    await context.bot.send_message(u["user_id"], f"📢 Xabar:\n\n{text}")
+                    sent += 1
+                except: pass
         context.user_data.clear()
         await update.message.reply_text(f"✅ Xabar {sent} ta foydalanuvchiga yuborildi.")
 
-    else:
-        return False
-    return True
-
-async def pdf_type_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    is_free = 1 if query.data == "pdf_type_free" else 0
-    context.user_data["new_pdf_is_free"] = is_free
-    context.user_data["admin_action"] = "waiting_pdf_file"
-    await query.edit_message_text("✅ Tanlandi!\n\nEndi PDF faylni yuboring:")
-
-# ═══════════════════════════════════════════
-#  UMUMIY HANDLER
-# ═══════════════════════════════════════════
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # To'lov cheki
-    if await handle_payment_proof(update, context):
-        return
-    # Test javoblari
-    if await handle_test_answers(update, context):
-        return
-    # Admin xabarlari
-    await handle_admin_message(update, context)
-
-async def back_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user = query.from_user
-    kb = [
-        [InlineKeyboardButton("📋 Bot haqida ma'lumot", callback_data="about_bot")],
-        [InlineKeyboardButton("🆓 Bepul sinab ko'rish", callback_data="free_tests")],
-        [InlineKeyboardButton("💎 Premium olish", callback_data="buy_premium")],
-        [InlineKeyboardButton("📨 To'liq kirish so'rovi", callback_data="request_access")],
-    ]
-    await query.edit_message_text(
-        f"👋 Salom, {user.first_name}!\n\nQuyidagilardan birini tanlang:",
-        reply_markup=InlineKeyboardMarkup(kb)
+async def handle_pdf_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id): return
+    if context.user_data.get("step") != "waiting_pdf_file": return
+    file_id = update.message.document.file_id
+    context.user_data["pdf_file_id"] = file_id
+    context.user_data["step"]        = "pdf_key"
+    count = context.user_data.get("pdf_count", 30)
+    await update.message.reply_text(
+        f"✅ PDF qabul qilindi!\n\n{count} ta javob kalitini yozing:\nMasalan: ABCDABCD... ({count} ta harf)"
     )
 
-async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        return
-    context.user_data.clear()
-    await show_admin_menu(update, context)
+# ─────────────────────────────────────────────────────────────────────────────
+#  CALLBACK — ADMIN CONTENT
+# ─────────────────────────────────────────────────────────────────────────────
+async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    if not is_admin(q.from_user.id): return
+    data = q.data
 
+    if data == "admin_back":     await show_admin_menu(update, context)
+    elif data == "admin_tests":  await admin_tests(update, context)
+    elif data == "admin_users":  await admin_users(update, context)
+    elif data == "admin_payments": await admin_payments(update, context)
+    elif data == "admin_stats":  await admin_stats(update, context)
+    elif data == "admin_guides": await admin_guides_menu(update, context)
+    elif data == "admin_videos": await admin_videos_menu(update, context)
+    elif data == "admin_add_pdf": await admin_add_pdf_prompt(update, context)
+    elif data == "admin_broadcast": await admin_broadcast_prompt(update, context)
+
+    elif data == "admin_add_guide":
+        context.user_data["step"] = "add_guide_title"
+        await q.edit_message_text("📚 Qo'llanma sarlavhasini yozing:\n\nBekor: /admin")
+
+    elif data == "admin_add_video":
+        context.user_data["step"] = "add_video_title"
+        await q.edit_message_text("🎬 Video sarlavhasini yozing:\n\nBekor: /admin")
+
+    elif data.startswith("agd_"):
+        gid = int(data.split("_")[1])
+        db.delete_guide(gid)
+        await q.answer("O'chirildi!", show_alert=True)
+        await admin_guides_menu(update, context)
+
+    elif data.startswith("avd_"):
+        vid = int(data.split("_")[1])
+        db.delete_video(vid)
+        await q.answer("O'chirildi!", show_alert=True)
+        await admin_videos_menu(update, context)
+
+    elif data.startswith("pdf_type_"):
+        is_free = 1 if data == "pdf_type_free" else 0
+        context.user_data["pdf_is_free"] = is_free
+        context.user_data["step"]        = "waiting_pdf_file"
+        await q.edit_message_text("✅ Tanlandi!\n\nEndi PDF faylni yuboring:")
+
+async def back_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    uid = q.from_user.id
+    u = db.get_user(uid)
+    fname = u["full_name"] if u and u.get("full_name") else (u["first_name"] if u else "")
+    await show_welcome_menu(update, context, fname)
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  MAIN
+# ─────────────────────────────────────────────────────────────────────────────
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("admin", admin_command))
+    app.add_handler(CommandHandler("admin", admin_cmd))
 
-    app.add_handler(CallbackQueryHandler(about_bot, pattern="^about_bot$"))
-    app.add_handler(CallbackQueryHandler(free_tests_menu, pattern="^free_tests$"))
-    app.add_handler(CallbackQueryHandler(buy_premium, pattern="^buy_premium$"))
-    app.add_handler(CallbackQueryHandler(send_payment_proof, pattern="^send_payment_proof$"))
-    app.add_handler(CallbackQueryHandler(payment_action, pattern="^pay_(approve|reject)_"))
-    app.add_handler(CallbackQueryHandler(request_access, pattern="^request_access$"))
-    app.add_handler(CallbackQueryHandler(admin_action, pattern=r"^(approve|reject)_\d+$"))
-    app.add_handler(CallbackQueryHandler(show_main_menu, pattern="^back_main$"))
-    app.add_handler(CallbackQueryHandler(back_start, pattern="^back_start$"))
+    # Umumiy
+    app.add_handler(CallbackQueryHandler(about_bot,          pattern=r"^about_bot$"))
+    app.add_handler(CallbackQueryHandler(free_menu,          pattern=r"^free_menu$"))
+    app.add_handler(CallbackQueryHandler(premium_info,       pattern=r"^premium_info$"))
+    app.add_handler(CallbackQueryHandler(premium_menu,       pattern=r"^premium_menu$"))
+    app.add_handler(CallbackQueryHandler(buy_premium,        pattern=r"^buy_premium$"))
+    app.add_handler(CallbackQueryHandler(send_payment_proof, pattern=r"^send_payment_proof$"))
+    app.add_handler(CallbackQueryHandler(payment_action,     pattern=r"^pay_(approve|reject)_\d+$"))
+    app.add_handler(CallbackQueryHandler(back_welcome,       pattern=r"^back_welcome$"))
 
-    app.add_handler(CallbackQueryHandler(menu_tests, pattern="^menu_tests$"))
-    app.add_handler(CallbackQueryHandler(show_pdf_test, pattern=r"^pdf_test_\d+$"))
+    # Testlar
+    app.add_handler(CallbackQueryHandler(menu_tests,         pattern=r"^menu_tests$"))
+    app.add_handler(CallbackQueryHandler(show_pdf_test,      pattern=r"^pdf_test_\d+$"))
     app.add_handler(CallbackQueryHandler(submit_test_prompt, pattern=r"^submit_test_\d+$"))
-    app.add_handler(CallbackQueryHandler(menu_guides, pattern="^menu_guides$"))
-    app.add_handler(CallbackQueryHandler(show_guide, pattern=r"^guide_\d+$"))
-    app.add_handler(CallbackQueryHandler(menu_videos, pattern="^menu_videos$"))
-    app.add_handler(CallbackQueryHandler(show_video, pattern=r"^video_\d+$"))
-    app.add_handler(CallbackQueryHandler(menu_results, pattern="^menu_results$"))
+    app.add_handler(CallbackQueryHandler(menu_guides,        pattern=r"^menu_guides$"))
+    app.add_handler(CallbackQueryHandler(show_guide,         pattern=r"^guide_\d+$"))
+    app.add_handler(CallbackQueryHandler(menu_videos,        pattern=r"^menu_videos$"))
+    app.add_handler(CallbackQueryHandler(show_video,         pattern=r"^video_\d+$"))
+    app.add_handler(CallbackQueryHandler(menu_results,       pattern=r"^menu_results$"))
 
-    app.add_handler(CallbackQueryHandler(admin_tests, pattern="^admin_tests$"))
-    app.add_handler(CallbackQueryHandler(admin_test_view, pattern=r"^admin_test_view_d+$"))
-    app.add_handler(CallbackQueryHandler(admin_test_results, pattern=r"^admin_test_results_\d+$"))
-    app.add_handler(CallbackQueryHandler(admin_test_toggle, pattern=r"^admin_test_toggle_\d+$"))
-    app.add_handler(CallbackQueryHandler(admin_test_delete, pattern=r"^admin_test_delete_\d+$"))
-    app.add_handler(CallbackQueryHandler(admin_test_delete_confirm, pattern=r"^admin_test_delete_confirm_\d+$"))
-    app.add_handler(CallbackQueryHandler(admin_users, pattern="^admin_users$"))
-    app.add_handler(CallbackQueryHandler(admin_users_list, pattern="^admin_users_(all|approved|premium|pending)$"))
-    app.add_handler(CallbackQueryHandler(admin_user_detail, pattern=r"^admin_user_\d+$"))
-    app.add_handler(CallbackQueryHandler(admin_user_action, pattern=r"^admin_user_(approve|premium|kick)_\d+$"))
-    app.add_handler(CallbackQueryHandler(admin_payments, pattern="^admin_payments$"))
-    app.add_handler(CallbackQueryHandler(pdf_type_callback, pattern="^pdf_type_(free|premium)$"))
-    app.add_handler(CallbackQueryHandler(admin_callback, pattern="^admin_"))
+    # Admin — test
+    app.add_handler(CallbackQueryHandler(admin_test_view,           pattern=r"^atv_\d+$"))
+    app.add_handler(CallbackQueryHandler(admin_test_toggle,         pattern=r"^att_\d+$"))
+    app.add_handler(CallbackQueryHandler(admin_test_results,        pattern=r"^atr_\d+$"))
+    app.add_handler(CallbackQueryHandler(admin_test_delete,         pattern=r"^atd_\d+$"))
+    app.add_handler(CallbackQueryHandler(admin_test_delete_confirm, pattern=r"^atdc_\d+$"))
+    app.add_handler(CallbackQueryHandler(admin_test_newkey,         pattern=r"^atk_\d+$"))
 
+    # Admin — foydalanuvchi
+    app.add_handler(CallbackQueryHandler(admin_users_list,  pattern=r"^aul_(all|approved|premium|pending)$"))
+    app.add_handler(CallbackQueryHandler(admin_user_detail, pattern=r"^aud_\d+$"))
+    app.add_handler(CallbackQueryHandler(admin_user_action, pattern=r"^aua_(approve|premium|kick)_\d+$"))
+
+    # Admin — umumiy
+    app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^admin_"))
+    app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^pdf_type_"))
+    app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^agd_\d+$"))
+    app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^avd_\d+$"))
+
+    # Xabarlar
     app.add_handler(MessageHandler(filters.Document.PDF, handle_pdf_upload))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, handle_message))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("Bot ishga tushdi!")
+    print("✅ Bot ishga tushdi!")
     app.run_polling()
 
 if __name__ == "__main__":
