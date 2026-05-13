@@ -352,32 +352,42 @@ async def handle_test_answers(update: Update, context: ContextTypes.DEFAULT_TYPE
         return True
     correct = sum(u == k for u, k in zip(clean, key))
     wrong   = q_count - correct
+    ball    = round(correct * 3.1, 1)
+    max_ball= round(q_count * 3.1, 1)
     pct     = round(correct / q_count * 100)
+
     if pct >= 85:   baho = "🏆 Ajoyib!"
     elif pct >= 70: baho = "👍 Yaxshi!"
     elif pct >= 50: baho = "📚 Qoniqarli"
     else:           baho = "💪 Ko'proq mashq kerak"
 
-    wrong_lines = [
-        f"  {i+1}-savol: Siz {u} ✗  →  To'g'ri: {k} ✓"
-        for i, (u, k) in enumerate(zip(clean, key)) if u != k
-    ]
+    # Xato javoblar tafsiloti
+    xato_lines = []
+    for i, (u, k) in enumerate(zip(clean, key)):
+        if u != k:
+            xato_lines.append(f"  {i+1}-savol: Siz ❌{u}  →  To'g'ri ✅{k}")
+
+    # To'g'ri javoblar ro'yxati (admin kiritgan)
+    togri_list = "\n".join(f"  {i+1}–{k}" for i, k in enumerate(key))
+
     result = (
-        f"📊 Natija\n{'─'*24}\n"
-        f"✅ To'g'ri: {correct}/{q_count}\n"
-        f"❌ Xato:   {wrong}/{q_count}\n"
-        f"📈 Foiz:   {pct}%\n"
-        f"🎯 Baho:   {baho}\n"
+        f"📊 Test natijasi\n{'─'*26}\n"
+        f"📋 Jami savollar:  {q_count} ta\n"
+        f"✅ To'g'ri javoblar: {correct} ta\n"
+        f"❌ Xato javoblar:  {wrong} ta\n"
+        f"🏅 Ball: {ball} / {max_ball}\n"
+        f"📈 Foiz: {pct}%\n"
+        f"🎯 {baho}\n"
     )
-    if wrong_lines:
-        result += f"\n❌ Xato javoblar ({wrong} ta):\n"
-        result += "\n".join(wrong_lines[:25])
-        if wrong > 25:
-            result += f"\n  ... va yana {wrong-25} ta xato"
+
+    if xato_lines:
+        result += f"\n{'─'*26}\n❌ Xato qilingan savollar ({wrong} ta):\n"
+        result += "\n".join(xato_lines[:30])
+
+    result += f"\n\n{'─'*26}\n✅ To'g'ri javoblar kaliti:\n{togri_list}"
 
     db.save_pdf_result(uid, test_id, correct, q_count, clean)
     context.user_data.clear()
-    prem = is_premium(uid)
     kb = [
         [InlineKeyboardButton("📝 Yana test", callback_data="menu_tests")],
         [InlineKeyboardButton("🏠 Bosh menyu", callback_data="back_welcome")],
@@ -528,16 +538,21 @@ async def admin_test_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_test_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     test_id = int(q.data.split("_")[1])
-    results = db.get_test_results(test_id)
+    results = db.get_test_rating(test_id)
     test    = db.get_pdf_test(test_id)
     kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data=f"atv_{test_id}")]]
     if not results:
         await q.edit_message_text("Hali hech kim yechmagan.", reply_markup=InlineKeyboardMarkup(kb))
         return
-    text = f"📊 {test['title']}:\n\n"
-    for r in results[:20]:
-        pct = round(r["correct"]/r["total"]*100)
-        text += f"👤 {r['first_name']}: {r['correct']}/{r['total']} ({pct}%)\n"
+    medals = ["🥇","🥈","🥉"]
+    text = f"🏆 {test['title']} — Reyting:\n{'─'*24}\n"
+    for i, r in enumerate(results[:20]):
+        medal = medals[i] if i < 3 else f"{i+1}."
+        ball  = round(r["correct"] * 3.1, 1)
+        total = r["total"]
+        pct   = round(r["correct"]/total*100) if total else 0
+        name  = r["full_name"] or r["first_name"]
+        text += f"{medal} {name}: {r['correct']}/{total} — {ball} ball ({pct}%)\n"
     await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
 async def admin_test_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -659,19 +674,47 @@ async def admin_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     s = db.get_stats()
-    kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]]
+    kb = [
+        [InlineKeyboardButton("🏆 Umumiy reyting", callback_data="admin_rating")],
+        [InlineKeyboardButton("📝 Test bo'yicha reyting", callback_data="admin_rating_by_test")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")],
+    ]
     await q.edit_message_text(
-        f"📊 Statistika:\n\n"
+        f"📊 Statistika\n{'─'*24}\n"
         f"👥 Jami foydalanuvchilar: {s['total_users']}\n"
         f"✅ Tasdiqlangan: {s['approved_users']}\n"
         f"⭐️ Premium: {s['premium_users']}\n"
-        f"⏳ Kutayotgan: {s['pending_users']}\n"
+        f"⏳ Kutayotgan: {s['pending_users']}\n\n"
         f"📝 Testlar: {s['total_pdf_tests']}\n"
         f"📚 Qo'llanmalar: {s['total_guides']}\n"
         f"🎬 Videolar: {s['total_videos']}\n"
         f"🏆 Jami natijalar: {s['total_results']}",
         reply_markup=InlineKeyboardMarkup(kb)
     )
+
+async def admin_rating(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Umumiy reyting — barcha testlar bo'yicha eng yuqori ball"""
+    q = update.callback_query; await q.answer()
+    ratings = db.get_overall_rating()
+    kb = [[InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_stats")]]
+    if not ratings:
+        await q.edit_message_text("Hali natijalar yo'q.", reply_markup=InlineKeyboardMarkup(kb))
+        return
+    text = "🏆 Umumiy reyting (eng yuqori ball):\n\n"
+    medals = ["🥇","🥈","🥉"]
+    for i, r in enumerate(ratings[:20]):
+        medal = medals[i] if i < 3 else f"{i+1}."
+        ball = round(r['correct'] * 3.1, 1)
+        text += f"{medal} {r['full_name'] or r['first_name']} — {ball} ball ({r['test_title']})\n"
+    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+
+async def admin_rating_by_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Test tanlash uchun"""
+    q = update.callback_query; await q.answer()
+    tests = db.get_all_pdf_tests()
+    kb = [[InlineKeyboardButton(f"📝 {t['title']}", callback_data=f"atr_{t['id']}")] for t in tests]
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_stats")])
+    await q.edit_message_text("📝 Qaysi test reytingini ko'rmoqchisiz?", reply_markup=InlineKeyboardMarkup(kb))
 
 # ─── BROADCAST ───────────────────────────────────────────────────────────────
 async def admin_broadcast_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -844,6 +887,8 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_users":  await admin_users(update, context)
     elif data == "admin_payments": await admin_payments(update, context)
     elif data == "admin_stats":  await admin_stats(update, context)
+    elif data == "admin_rating": await admin_rating(update, context)
+    elif data == "admin_rating_by_test": await admin_rating_by_test(update, context)
     elif data == "admin_guides": await admin_guides_menu(update, context)
     elif data == "admin_videos": await admin_videos_menu(update, context)
     elif data == "admin_add_pdf": await admin_add_pdf_prompt(update, context)
