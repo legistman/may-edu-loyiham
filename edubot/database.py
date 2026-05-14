@@ -36,9 +36,9 @@ class Database:
         c.execute("""CREATE TABLE IF NOT EXISTS guides (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             title      TEXT NOT NULL,
-            content    TEXT NOT NULL,
+            content    TEXT DEFAULT '',
             is_free    INTEGER DEFAULT 1,
-            file_id    TEXT    DEFAULT '',
+            file_id    TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
         c.execute("""CREATE TABLE IF NOT EXISTS payment_requests (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,19 +48,33 @@ class Database:
         c.execute("""CREATE TABLE IF NOT EXISTS settings (
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL)""")
+        c.execute("""CREATE TABLE IF NOT EXISTS start_message (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            text       TEXT NOT NULL,
+            photo_id   TEXT DEFAULT '',
+            is_active  INTEGER DEFAULT 1,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
         # Default sozlamalar
-        c.execute("INSERT OR IGNORE INTO settings (key,value) VALUES ('premium_price','349 000')")
-        c.execute("INSERT OR IGNORE INTO settings (key,value) VALUES ('premium_days','30')")
-        c.execute("INSERT OR IGNORE INTO settings (key,value) VALUES ('card_number','9860 3501 4876 2387')")
-        c.execute("INSERT OR IGNORE INTO settings (key,value) VALUES ('card_owner','Mallayev Ozodbek')")
-        # Eski bazaga yangi ustunlar
-        for col in [("full_name","TEXT DEFAULT ''"),("is_free","INTEGER DEFAULT 1")]:
-            for tbl in [("users", col[0]), ("guides", "is_free")]:
-                try: c.execute(f"ALTER TABLE {tbl[0]} ADD COLUMN {col[0]} {col[1]}")
-                except: pass
-        try: c.execute("ALTER TABLE guides ADD COLUMN is_free INTEGER DEFAULT 1")
-        except: pass
-        try: c.execute("ALTER TABLE guides ADD COLUMN file_id TEXT DEFAULT ''")
+        defaults = [
+            ('premium_price', '349 000'),
+            ('premium_days',  '30'),
+            ('card_number',   '9860 3501 4876 2387'),
+            ('card_owner',    'Mallayev Ozodbek'),
+        ]
+        for k, v in defaults:
+            c.execute("INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)", (k, v))
+        # Default start xabari
+        c.execute("""INSERT OR IGNORE INTO start_message (id,text) VALUES (1,
+            '🚀 LEGISTMAN BOT ga xush kelibsiz!\n\nAssalomu alaykum! 👋\n\nSiz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imkonini beruvchi LEGISTMAN BOT ga kirdingiz.\n\n📚 Ushbu bot — Telegram''da faoliyat yuritib kelayotgan @legistman kanaliga tegishli bo''lib, u sizga faqat testlar emas, balki tizimli, tushunarli va amaliy huquqiy qo''llanmalarni ham taqdim etadi.\n\n🤖 Bot yaratuvchisi: @legistman_uz')""")
+        # Eski ustunlar
+        for tbl, col, defval in [
+            ("users",  "full_name", "TEXT DEFAULT ''"),
+            ("guides", "is_free",   "INTEGER DEFAULT 1"),
+            ("guides", "file_id",   "TEXT DEFAULT ''"),
+        ]:
+            try: c.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {defval}")
+            except: pass
+        try: c.execute("ALTER TABLE start_message ADD COLUMN photo_id TEXT DEFAULT ''")
         except: pass
         self.conn.commit()
 
@@ -73,18 +87,41 @@ class Database:
         self.conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)", (key, value))
         self.conn.commit()
 
+    # ── START MESSAGE ─────────────────────────────────────────────────────────
+    def get_start_message(self):
+        r = self.conn.execute("SELECT * FROM start_message WHERE id=1").fetchone()
+        return dict(r) if r else None
+
+    def update_start_message(self, text=None, photo_id=None):
+        sm = self.get_start_message()
+        t  = text     if text     is not None else sm["text"]
+        p  = photo_id if photo_id is not None else sm["photo_id"]
+        self.conn.execute(
+            "UPDATE start_message SET text=?, photo_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=1",
+            (t, p)
+        )
+        self.conn.commit()
+
     # ── USERS ─────────────────────────────────────────────────────────────────
     def add_user(self, user_id, username, first_name, full_name=""):
         ex = self.get_user(user_id)
         if ex:
             if full_name:
-                self.conn.execute("UPDATE users SET username=?,first_name=?,full_name=? WHERE user_id=?",
-                                  (username, first_name, full_name, user_id))
+                self.conn.execute(
+                    "UPDATE users SET username=?,first_name=?,full_name=? WHERE user_id=?",
+                    (username, first_name, full_name, user_id))
                 self.conn.commit()
         else:
-            self.conn.execute("INSERT INTO users (user_id,username,first_name,full_name) VALUES (?,?,?,?)",
-                              (user_id, username, first_name, full_name))
+            self.conn.execute(
+                "INSERT INTO users (user_id,username,first_name,full_name) VALUES (?,?,?,?)",
+                (user_id, username, first_name, full_name))
             self.conn.commit()
+
+    def reset_user(self, user_id):
+        """Foydalanuvchini qayta ro'yxatdan o'tishga majburlash"""
+        self.conn.execute(
+            "UPDATE users SET full_name='', status='new' WHERE user_id=?", (user_id,))
+        self.conn.commit()
 
     def get_user(self, user_id):
         r = self.conn.execute("SELECT * FROM users WHERE user_id=?", (user_id,)).fetchone()
@@ -99,26 +136,32 @@ class Database:
         self.conn.commit()
 
     def get_all_users(self):
-        return [dict(r) for r in self.conn.execute("SELECT * FROM users ORDER BY joined_at DESC").fetchall()]
+        return [dict(r) for r in self.conn.execute(
+            "SELECT * FROM users ORDER BY joined_at DESC").fetchall()]
 
     def get_users_by_status(self, status=None):
         if status:
-            rows = self.conn.execute("SELECT * FROM users WHERE status=? ORDER BY joined_at DESC", (status,)).fetchall()
+            rows = self.conn.execute(
+                "SELECT * FROM users WHERE status=? ORDER BY joined_at DESC", (status,)).fetchall()
         else:
-            rows = self.conn.execute("SELECT * FROM users ORDER BY joined_at DESC").fetchall()
+            rows = self.conn.execute(
+                "SELECT * FROM users ORDER BY joined_at DESC").fetchall()
         return [dict(r) for r in rows]
 
     def set_premium(self, user_id, expiry: datetime):
-        self.conn.execute("UPDATE users SET status='premium',premium_until=? WHERE user_id=?",
-                          (expiry.isoformat(), user_id))
+        self.conn.execute(
+            "UPDATE users SET status='premium',premium_until=? WHERE user_id=?",
+            (expiry.isoformat(), user_id))
         self.conn.commit()
 
     def remove_premium(self, user_id):
-        self.conn.execute("UPDATE users SET status='approved',premium_until=NULL WHERE user_id=?", (user_id,))
+        self.conn.execute(
+            "UPDATE users SET status='approved',premium_until=NULL WHERE user_id=?", (user_id,))
         self.conn.commit()
 
     def get_premium_expiry(self, user_id):
-        r = self.conn.execute("SELECT premium_until FROM users WHERE user_id=?", (user_id,)).fetchone()
+        r = self.conn.execute(
+            "SELECT premium_until FROM users WHERE user_id=?", (user_id,)).fetchone()
         if r and r["premium_until"]:
             try: return datetime.fromisoformat(r["premium_until"])
             except: return None
@@ -126,27 +169,32 @@ class Database:
 
     # ── PDF TESTS ─────────────────────────────────────────────────────────────
     def add_pdf_test(self, title, file_id, question_count, answer_key, is_free=0):
-        self.conn.execute("INSERT INTO pdf_tests (title,file_id,question_count,answer_key,is_free) VALUES (?,?,?,?,?)",
-                          (title, file_id, question_count, answer_key, is_free))
+        self.conn.execute(
+            "INSERT INTO pdf_tests (title,file_id,question_count,answer_key,is_free) VALUES (?,?,?,?,?)",
+            (title, file_id, question_count, answer_key, is_free))
         self.conn.commit()
 
     def get_all_pdf_tests(self):
-        return [dict(r) for r in self.conn.execute("SELECT * FROM pdf_tests ORDER BY created_at DESC").fetchall()]
+        return [dict(r) for r in self.conn.execute(
+            "SELECT * FROM pdf_tests ORDER BY created_at DESC").fetchall()]
 
     def get_free_pdf_tests(self):
-        return [dict(r) for r in self.conn.execute("SELECT * FROM pdf_tests WHERE is_free=1 ORDER BY created_at DESC").fetchall()]
+        return [dict(r) for r in self.conn.execute(
+            "SELECT * FROM pdf_tests WHERE is_free=1 ORDER BY created_at DESC").fetchall()]
 
     def get_pdf_test(self, test_id):
         r = self.conn.execute("SELECT * FROM pdf_tests WHERE id=?", (test_id,)).fetchone()
         return dict(r) if r else None
 
     def update_pdf_test(self, test_id, title=None, answer_key=None, is_free=None):
-        test = self.get_pdf_test(test_id)
-        if not test: return
-        t = title if title is not None else test["title"]
-        k = answer_key if answer_key is not None else test["answer_key"]
-        f = is_free if is_free is not None else test["is_free"]
-        self.conn.execute("UPDATE pdf_tests SET title=?,answer_key=?,is_free=? WHERE id=?", (t, k, f, test_id))
+        t = self.get_pdf_test(test_id)
+        if not t: return
+        new_title  = title      if title      is not None else t["title"]
+        new_key    = answer_key if answer_key is not None else t["answer_key"]
+        new_free   = is_free    if is_free    is not None else t["is_free"]
+        self.conn.execute(
+            "UPDATE pdf_tests SET title=?,answer_key=?,is_free=? WHERE id=?",
+            (new_title, new_key, new_free, test_id))
         self.conn.commit()
 
     def delete_pdf_test(self, test_id):
@@ -154,13 +202,15 @@ class Database:
         self.conn.commit()
 
     def get_answer_key(self, test_id):
-        r = self.conn.execute("SELECT answer_key FROM pdf_tests WHERE id=?", (test_id,)).fetchone()
+        r = self.conn.execute(
+            "SELECT answer_key FROM pdf_tests WHERE id=?", (test_id,)).fetchone()
         return r["answer_key"] if r else None
 
     # ── RESULTS ───────────────────────────────────────────────────────────────
     def save_pdf_result(self, user_id, test_id, correct, total, answers):
-        self.conn.execute("INSERT INTO pdf_results (user_id,test_id,correct,total,answers) VALUES (?,?,?,?,?)",
-                          (user_id, test_id, correct, total, answers))
+        self.conn.execute(
+            "INSERT INTO pdf_results (user_id,test_id,correct,total,answers) VALUES (?,?,?,?,?)",
+            (user_id, test_id, correct, total, answers))
         self.conn.commit()
 
     def get_user_pdf_results(self, user_id):
@@ -175,7 +225,8 @@ class Database:
             SELECT r.user_id, MAX(r.correct) as correct, r.total,
                    u.first_name, u.full_name, u.username
             FROM pdf_results r JOIN users u ON r.user_id=u.user_id
-            WHERE r.test_id=? GROUP BY r.user_id ORDER BY correct DESC""", (test_id,)).fetchall()
+            WHERE r.test_id=? GROUP BY r.user_id ORDER BY correct DESC""",
+            (test_id,)).fetchall()
         return [dict(r) for r in rows]
 
     def get_overall_rating(self):
@@ -185,20 +236,25 @@ class Database:
             FROM pdf_results r
             JOIN users u ON r.user_id=u.user_id
             JOIN pdf_tests t ON r.test_id=t.id
-            WHERE r.correct=(SELECT MAX(r2.correct) FROM pdf_results r2 WHERE r2.user_id=r.user_id)
+            WHERE r.correct=(
+                SELECT MAX(r2.correct) FROM pdf_results r2 WHERE r2.user_id=r.user_id)
             GROUP BY r.user_id ORDER BY r.correct DESC""").fetchall()
         return [dict(r) for r in rows]
 
     # ── GUIDES ────────────────────────────────────────────────────────────────
-    def add_guide(self, title, content, is_free=1, file_id=""):
-        self.conn.execute("INSERT INTO guides (title,content,is_free,file_id) VALUES (?,?,?,?)", (title, content, is_free, file_id))
+    def add_guide(self, title, content="", is_free=1, file_id=""):
+        self.conn.execute(
+            "INSERT INTO guides (title,content,is_free,file_id) VALUES (?,?,?,?)",
+            (title, content, is_free, file_id))
         self.conn.commit()
 
     def get_all_guides(self):
-        return [dict(r) for r in self.conn.execute("SELECT * FROM guides ORDER BY created_at DESC").fetchall()]
+        return [dict(r) for r in self.conn.execute(
+            "SELECT * FROM guides ORDER BY created_at DESC").fetchall()]
 
     def get_free_guides(self):
-        return [dict(r) for r in self.conn.execute("SELECT * FROM guides WHERE is_free=1 ORDER BY created_at DESC").fetchall()]
+        return [dict(r) for r in self.conn.execute(
+            "SELECT * FROM guides WHERE is_free=1 ORDER BY created_at DESC").fetchall()]
 
     def get_guide(self, guide_id):
         r = self.conn.execute("SELECT * FROM guides WHERE id=?", (guide_id,)).fetchone()
@@ -211,7 +267,9 @@ class Database:
         c  = content if content is not None else g["content"]
         f  = is_free if is_free is not None else g["is_free"]
         fi = file_id if file_id is not None else g.get("file_id","")
-        self.conn.execute("UPDATE guides SET title=?,content=?,is_free=?,file_id=? WHERE id=?", (t, c, f, fi, guide_id))
+        self.conn.execute(
+            "UPDATE guides SET title=?,content=?,is_free=?,file_id=? WHERE id=?",
+            (t, c, f, fi, guide_id))
         self.conn.commit()
 
     def delete_guide(self, guide_id):
@@ -220,7 +278,8 @@ class Database:
 
     # ── PAYMENTS ──────────────────────────────────────────────────────────────
     def add_payment_request(self, user_id):
-        self.conn.execute("INSERT INTO payment_requests (user_id) VALUES (?)", (user_id,))
+        self.conn.execute(
+            "INSERT INTO payment_requests (user_id) VALUES (?)", (user_id,))
         self.conn.commit()
 
     def get_pending_payments(self):
