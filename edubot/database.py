@@ -213,6 +213,16 @@ class Database:
             (user_id, test_id, correct, total, answers))
         self.conn.commit()
 
+    def get_user_results_for_test(self, user_id, test_id):
+        """Foydalanuvchining bitta test bo'yicha barcha natijalari"""
+        rows = self.conn.execute("""
+            SELECT correct, total, answers, taken_at
+            FROM pdf_results
+            WHERE user_id=? AND test_id=?
+            ORDER BY taken_at DESC
+        """, (user_id, test_id)).fetchall()
+        return [dict(r) for r in rows]
+
     def get_user_pdf_results(self, user_id):
         rows = self.conn.execute("""
             SELECT r.correct,r.total,r.answers,r.taken_at,t.title as test_title,t.answer_key
