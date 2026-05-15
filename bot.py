@@ -349,10 +349,32 @@ async def show_pdf_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["step"] = "active_test"
     context.user_data["tid"]  = test_id
     context.user_data["tcnt"] = n
+
+    # Faylni yuborish — protect_content=True (forward va yuklab olish taqiqlangan)
     await context.bot.send_document(
-        q.message.chat_id, test["file_id"],
-        caption=f"📝 {test['title']}\n❓ Savollar: {n} ta\n\nTestni yechib bo'lgach javob yuboring."
+        q.message.chat_id,
+        test["file_id"],
+        caption=f"📝 {test['title']}\n❓ Savollar: {n} ta\n\nTestni yechib bo'lgach javob yuboring.",
+        protect_content=True
     )
+
+    # Adminga log
+    u    = db.get_user(uid)
+    name = uname(u) if u else str(uid)
+    now  = datetime.now().strftime("%d.%m.%Y %H:%M")
+    try:
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"📥 Fayl yuborildi\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📝 Test: {test['title']}\n"
+            f"👤 Kim: {name}\n"
+            f"🆔 ID: {uid}\n"
+            f"📛 @{q.from_user.username or 'yoq'}\n"
+            f"🕐 Vaqt: {now}"
+        )
+    except: pass
+
     kb = [[InlineKeyboardButton("✏️ Javob yuboraman", callback_data=f"submit_test_{test_id}")]]
     await context.bot.send_message(q.message.chat_id, "Tayyor bo'ldingizmi?", reply_markup=InlineKeyboardMarkup(kb))
 
