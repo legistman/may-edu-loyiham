@@ -1,5 +1,8 @@
 import logging, os, re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+TASHKENT = ZoneInfo('Asia/Tashkent')
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
@@ -20,7 +23,7 @@ def is_premium(uid):
     u = db.get_user(uid)
     if not u or u["status"] != "premium": return False
     exp = db.get_premium_expiry(uid)
-    if not exp or datetime.now() > exp:
+    if not exp or datetime.now(TASHKENT) > exp:
         db.set_user_status(uid, "approved")
         return False
     return True
@@ -285,7 +288,7 @@ async def payment_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     days = int(S("premium_days") or "30")
     old  = q.message.caption or q.message.text or ""
     if action == "ok":
-        exp = datetime.now() + timedelta(days=days)
+        exp = datetime.now(TASHKENT) + timedelta(days=days)
         db.set_premium(tid, exp)
         try: await q.edit_message_caption(old + f"\n\n✅ Tasdiqlandi! {exp.strftime('%d.%m.%Y')} gacha")
         except: await q.edit_message_text(old + "\n\n✅ Tasdiqlandi!")
@@ -361,7 +364,7 @@ async def show_pdf_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Adminga log
     u    = db.get_user(uid)
     name = uname(u) if u else str(uid)
-    now  = datetime.now().strftime("%d.%m.%Y %H:%M")
+    now  = datetime.now(TASHKENT).strftime("%d.%m.%Y %H:%M")
     try:
         await context.bot.send_message(
             ADMIN_ID,
@@ -763,7 +766,7 @@ async def adm_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except: pass
         msg = "✅ Tasdiqlandi!"
     elif action == "prem":
-        exp = datetime.now() + timedelta(days=days)
+        exp = datetime.now(TASHKENT) + timedelta(days=days)
         db.set_premium(tid, exp)
         try: await context.bot.send_message(tid, f"⭐️ Premium berildi! {exp.strftime('%d.%m.%Y')} gacha. /start bosing.")
         except: pass
@@ -864,7 +867,7 @@ async def adm_archive_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def adm_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     s   = db.get_stats()
-    now = datetime.now().strftime("%d.%m.%Y %H:%M")
+    now = datetime.now(TASHKENT).strftime("%d.%m.%Y %H:%M")
     kb  = [
         [InlineKeyboardButton("🔄 Yangilash",                    callback_data="adm_stats")],
         [InlineKeyboardButton("🏆 Umumiy reyting",               callback_data="adm_rating_all")],
