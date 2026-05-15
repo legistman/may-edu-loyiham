@@ -292,12 +292,15 @@ class Database:
     # ── STATS ─────────────────────────────────────────────────────────────────
     def get_stats(self):
         c = self.conn.cursor()
+        today = datetime.now().strftime("%Y-%m-%d")
         return {
             "total_users":     c.execute("SELECT COUNT(*) FROM users").fetchone()[0],
             "approved_users":  c.execute("SELECT COUNT(*) FROM users WHERE status='approved'").fetchone()[0],
             "premium_users":   c.execute("SELECT COUNT(*) FROM users WHERE status='premium'").fetchone()[0],
             "pending_users":   c.execute("SELECT COUNT(*) FROM users WHERE status='pending'").fetchone()[0],
+            "today_users":     c.execute("SELECT COUNT(*) FROM users WHERE joined_at LIKE ?", (today+"%",)).fetchone()[0],
             "total_pdf_tests": c.execute("SELECT COUNT(*) FROM pdf_tests").fetchone()[0],
             "total_guides":    c.execute("SELECT COUNT(*) FROM guides").fetchone()[0],
             "total_results":   c.execute("SELECT COUNT(*) FROM pdf_results").fetchone()[0],
+            "today_results":   c.execute("SELECT COUNT(*) FROM pdf_results WHERE taken_at LIKE ?", (today+"%",)).fetchone()[0],
         }
