@@ -326,6 +326,19 @@ async def contact_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup([[back_btn(back)]])
     )
 
+async def admin_reply_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    if not is_admin(q.from_user.id): return
+    target_id = int(q.data.replace("reply_", ""))
+    u    = db.get_user(target_id)
+    name = uname(u) if u else str(target_id)
+    context.user_data["step"]          = "admin_reply"
+    context.user_data["reply_to_uid"]  = target_id
+    context.user_data["reply_to_name"] = name
+    await q.edit_message_text(f"✍️ {name} ga javob yozing:\n\nBekor: /admin")
+
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  TESTLAR
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -365,23 +378,6 @@ async def show_pdf_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption=f"📝 {test['title']}\n❓ Savollar: {n} ta\n\nTestni yechib bo'lgach javob yuboring.",
         protect_content=True
     )
-
-    # Adminga log
-    u    = db.get_user(uid)
-    name = uname(u) if u else str(uid)
-    now  = datetime.now(TASHKENT).strftime("%d.%m.%Y %H:%M")
-    try:
-        await context.bot.send_message(
-            ADMIN_ID,
-            f"📥 Fayl yuborildi\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📝 Test: {test['title']}\n"
-            f"👤 Kim: {name}\n"
-            f"🆔 ID: {uid}\n"
-            f"📛 @{q.from_user.username or 'yoq'}\n"
-            f"🕐 Vaqt: {now}"
-        )
-    except: pass
 
     kb = [[InlineKeyboardButton("✏️ Javob yuboraman", callback_data=f"submit_test_{test_id}")]]
     await context.bot.send_message(q.message.chat_id, "Tayyor bo'ldingizmi?", reply_markup=InlineKeyboardMarkup(kb))
@@ -451,8 +447,8 @@ async def handle_test_answers(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"🎯 Natijangizni yanada yaxshilang!"
         )
         kb = [
-            [InlineKeyboardButton("⭐️ Premium olish — batafsil tahlil", callback_data="buy_premium")],
             [InlineKeyboardButton("📝 Yana test",  callback_data="free_tests")],
+            [InlineKeyboardButton("📊 Statistika", callback_data="user_stats")],
             [InlineKeyboardButton("🏠 Bosh menyu", callback_data="back_welcome")],
         ]
     else:
@@ -471,6 +467,56 @@ async def handle_test_answers(update: Update, context: ContextTypes.DEFAULT_TYPE
         ]
 
     await update.message.reply_text(result, reply_markup=InlineKeyboardMarkup(kb))
+
+    # Bepul foydalanuvchiga ALOHIDA marketing xabari
+    if is_free_test and not prem_user:
+        price = S("premium_price")
+        u     = db.get_user(uid)
+        name  = (u.get("full_name") or u.get("first_name","")) if u else ""
+        if pct >= 85:
+            msg = (
+                f"🏆 {name}, siz {pct}% natija ko'rsatdingiz!\n\n"
+                f"Bu ajoyib! Lekin bilasizmi — xatolaringiz qayerda?\n\n"
+                f"⭐️ Premium foydalanuvchilar:\n"
+                f"✅ Har bir xato savolini aniq ko'radi\n"
+                f"🔑 To'g'ri javoblar kalitini oladi\n"
+                f"📊 Barcha testlarga kiradi\n"
+                f"📚 Maxsus qo'llanmalardan foydalanadi\n\n"
+                f"💰 Atigi {price} so'm / 30 kun\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Bilimingizni to'liq namoyon eting! 🚀"
+            )
+        elif pct >= 50:
+            msg = (
+                f"📈 {name}, {pct}% — yaxshi natija!\n\n"
+                f"Agar xatolaringizni bilsangiz,\n"
+                f"keyingi safargi natija yanada yaxshi bo'ladi.\n\n"
+                f"⭐️ Premium bilan nima qo'shiladi:\n"
+                f"🔍 Har bir xato savol ko'rsatiladi\n"
+                f"✅ To'g'ri javoblar ro'yxati beriladi\n"
+                f"📝 Barcha premium testlar ochiladi\n"
+                f"📚 Amaliy qo'llanmalar bilan mustahkamlash\n\n"
+                f"💰 {price} so'm / 30 kun\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Xatolardan o'rganish — professionallik belgisi! 💡"
+            )
+        else:
+            msg = (
+                f"💪 {name}, har bir urinish sizni oldinga olib boradi!\n\n"
+                f"Hozir {pct}% — lekin bu faqat boshlash.\n"
+                f"Qaysi mavzularda kamchilik borligini bilib oling.\n\n"
+                f"⭐️ Premium — eng tez o'sish yo'li:\n"
+                f"🔍 Xatolaringizni aniq ko'ring\n"
+                f"📚 Qo'llanmalar bilan bilimingizni to'ldiring\n"
+                f"📝 Cheksiz testlar bilan mashq qiling\n"
+                f"🏆 O'z progressingizni kuzating\n\n"
+                f"💰 {price} so'm / 30 kun\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Muvaffaqiyat tizimli tayyorgarlik natijasidir! 🎯"
+            )
+        mk = [[InlineKeyboardButton("⭐️ Premium olish — hoziroq!", callback_data="buy_premium")]]
+        await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(mk))
+
     return True
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -488,16 +534,49 @@ async def menu_guides(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def show_guide(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; await q.answer()
-    g = db.get_guide(int(q.data.split("_")[1]))
+    q   = update.callback_query; await q.answer()
+    gid = int(q.data.split("_")[1])
+    g   = db.get_guide(gid)
     if not g: return
-    kb = [[back_btn("free_guides")]]
-    file_id = g.get("file_id","")
+    uid       = q.from_user.id
+    prem      = is_premium(uid)
+    is_free_g = g.get("is_free", 1)
+    back      = "free_guides" if is_free_g else "menu_guides"
+    kb        = [[back_btn(back)]]
+    file_id   = g.get("file_id","")
+
     if file_id:
-        await context.bot.send_document(q.message.chat_id, file_id, caption=f"📖 {g['title']}")
-        await context.bot.send_message(q.message.chat_id, "⬅️", reply_markup=InlineKeyboardMarkup(kb))
+        await context.bot.send_document(
+            q.message.chat_id, file_id,
+            caption=f"📖 {g['title']}",
+            protect_content=True
+        )
+        await context.bot.send_message(q.message.chat_id, "👆", reply_markup=InlineKeyboardMarkup(kb))
     else:
-        await q.edit_message_text(f"📖 {g['title']}\n\n{g['content']}"[:4000], reply_markup=InlineKeyboardMarkup(kb))
+        await q.edit_message_text(
+            f"📖 {g['title']}\n\n{g['content']}"[:4000],
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+
+    # Bepul qo'llanmadan keyin alohida marketing xabari
+    if is_free_g and not prem:
+        price = S("premium_price")
+        u     = db.get_user(uid)
+        name  = (u.get("full_name") or u.get("first_name","")) if u else ""
+        msg   = (
+            f"📚 {name}, bu faqat bir namuna!\n\n"
+            f"Bizning to'liq qo'llanmalar bazamizda:\n"
+            f"📖 Huquqning barcha sohalari bo'yicha materiallar\n"
+            f"🎯 BMBA imtihoniga maxsus tayyorgarlik\n"
+            f"✅ Amaliy misollar va tahlillar\n"
+            f"📝 Har bir mavzu bo'yicha test\n\n"
+            f"⭐️ Premium obuna bilan barchasiga kirish oching.\n\n"
+            f"💰 {price} so'm / 30 kun\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Bilim — eng foydali investitsiya! 📈"
+        )
+        mk = [[InlineKeyboardButton("⭐️ Premium olish — barchasini oching!", callback_data="buy_premium")]]
+        await context.bot.send_message(q.message.chat_id, msg, reply_markup=InlineKeyboardMarkup(mk))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  STATISTIKA (FOYDALANUVCHI)
@@ -1478,6 +1557,8 @@ def main():
     app.add_handler(CallbackQueryHandler(send_payment_proof, pattern=r"^send_payment_proof$"))
     app.add_handler(CallbackQueryHandler(payment_action,     pattern=r"^pay_(ok|no)_\d+$"))
     app.add_handler(CallbackQueryHandler(contact_admin,      pattern=r"^contact_admin$"))
+    app.add_handler(CallbackQueryHandler(admin_reply_prompt, pattern=r"^reply_\d+$"))
+    app.add_handler(CallbackQueryHandler(admin_reply_prompt, pattern=r"^reply_\d+$"))
     app.add_handler(CallbackQueryHandler(back_welcome,       pattern=r"^back_welcome$"))
 
     # Testlar
