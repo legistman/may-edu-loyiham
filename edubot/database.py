@@ -17,7 +17,7 @@ class Database:
             first_name    TEXT    DEFAULT '',
             full_name     TEXT    DEFAULT '',
             status        TEXT    DEFAULT 'new',
-            premium_until TEXT    DEFAULT NULL,
+            pro_until TEXT    DEFAULT NULL,
             joined_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
         c.execute("""CREATE TABLE IF NOT EXISTS pdf_tests (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,22 +148,22 @@ class Database:
                 "SELECT * FROM users ORDER BY joined_at DESC").fetchall()
         return [dict(r) for r in rows]
 
-    def set_premium(self, user_id, expiry: datetime):
+    def set_pro(self, user_id, expiry: datetime):
         self.conn.execute(
-            "UPDATE users SET status='premium',premium_until=? WHERE user_id=?",
+            "UPDATE users SET status='pro',pro_until=? WHERE user_id=?",
             (expiry.isoformat(), user_id))
         self.conn.commit()
 
-    def remove_premium(self, user_id):
+    def remove_pro(self, user_id):
         self.conn.execute(
-            "UPDATE users SET status='approved',premium_until=NULL WHERE user_id=?", (user_id,))
+            "UPDATE users SET status='approved',pro_until=NULL WHERE user_id=?", (user_id,))
         self.conn.commit()
 
-    def get_premium_expiry(self, user_id):
+    def get_pro_expiry(self, user_id):
         r = self.conn.execute(
-            "SELECT premium_until FROM users WHERE user_id=?", (user_id,)).fetchone()
-        if r and r["premium_until"]:
-            try: return datetime.fromisoformat(r["premium_until"])
+            "SELECT pro_until FROM users WHERE user_id=?", (user_id,)).fetchone()
+        if r and r["pro_until"]:
+            try: return datetime.fromisoformat(r["pro_until"])
             except: return None
         return None
 
@@ -305,8 +305,9 @@ class Database:
         today = datetime.now().strftime("%Y-%m-%d")
         return {
             "total_users":     c.execute("SELECT COUNT(*) FROM users").fetchone()[0],
+            "pro_users":     c.execute("SELECT COUNT(*) FROM users WHERE status='pro'").fetchone()[0],
             "approved_users":  c.execute("SELECT COUNT(*) FROM users WHERE status='approved'").fetchone()[0],
-            "premium_users":   c.execute("SELECT COUNT(*) FROM users WHERE status='premium'").fetchone()[0],
+            "premium_users":   c.execute("SELECT COUNT(*) FROM users WHERE status='pro'").fetchone()[0],
             "pending_users":   c.execute("SELECT COUNT(*) FROM users WHERE status='pending'").fetchone()[0],
             "today_users":     c.execute("SELECT COUNT(*) FROM users WHERE joined_at LIKE ?", (today+"%",)).fetchone()[0],
             "total_pdf_tests": c.execute("SELECT COUNT(*) FROM pdf_tests").fetchone()[0],
