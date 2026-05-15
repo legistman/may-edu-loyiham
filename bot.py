@@ -795,50 +795,47 @@ async def adm_archive(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def adm_archive_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
-    tid  = int(q.data.split("_")[1])
-    t    = db.get_pdf_test(tid)
-    if not t: return
-    res  = db.get_test_rating(tid)
-    ic   = "🆓 Bepul" if t.get("is_free") else "⭐️ Premium"
+    # arv_ID formatidan ID olish
+    try:
+        tid = int(q.data.replace("arv_", ""))
+    except:
+        await q.answer("Xato!", show_alert=True); return
 
-    # Ball hisobi
-    avg_ball = 0
-    if res:
-        avg_ball = round(sum(r["correct"] * 3.1 for r in res) / len(res), 1)
-    best = res[0] if res else None
-    best_name = (best.get("full_name") or best.get("first_name","?")) if best else "—"
-    best_ball = round(best["correct"] * 3.1, 1) if best else 0
+    t = db.get_pdf_test(tid)
+    if not t:
+        await q.answer("Test topilmadi!", show_alert=True); return
 
-    medals = ["🥇","🥈","🥉"]
-    top3 = ""
-    for i, r in enumerate(res[:3]):
-        medal = medals[i]
-        ball  = round(r["correct"] * 3.1, 1)
-        name  = r.get("full_name") or r.get("first_name","?")
-        pct   = round(r["correct"]/r["total"]*100) if r["total"] else 0
-        top3 += f"{medal} {name}: {ball} ball ({pct}%)\n"
+    ic  = "🆓 Bepul" if t.get("is_free") else "⭐️ Premium"
+    key = t.get("answer_key", "")
+    n   = t.get("question_count", len(key))
 
-    kalit_formatted = " ".join(
-        f"{i+1}-{k}" for i,k in enumerate(t["answer_key"])
-    )
+    # Kalitni tartibli ko'rsatish: 5 tadan qatorga ajratish
+    rows = []
+    for i in range(0, len(key), 5):
+        chunk = key[i:i+5]
+        row   = "  ".join(f"{i+j+1}.{c}" for j,c in enumerate(chunk))
+        rows.append(row)
+    kalit_text = "\n".join(rows)
 
     text = (
-        f"📦 ARXIV — {t['title']}\n{'━'*28}\n"
+        f"🔑 Kalit arxivi\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📝 {t['title']}\n"
         f"📌 Turi: {ic}\n"
-        f"❓ Savollar: {t['question_count']} ta\n"
-        f"👥 Yechganlar: {len(res)} ta\n"
-        f"📊 O'rtacha ball: {avg_ball}\n"
-        f"🏆 Eng yuqori: {best_name} ({best_ball} ball)\n"
-        f"{'━'*28}\n"
-        f"🥇 Top 3:\n{top3 if top3 else 'Hali yoq'}\n"
-        f"{'━'*28}\n"
-        f"🔑 To'g'ri javoblar kaliti:\n{kalit_formatted}"
+        f"❓ Savollar: {n} ta\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"✅ To'g'ri javoblar:\n\n"
+        f"{kalit_text}"
     )
+
     kb = [
-        [InlineKeyboardButton("📊 To'liq reyting",  callback_data=f"atr_{tid}")],
-        [InlineKeyboardButton("✏️ Testni tahrirlash", callback_data=f"atv_{tid}")],
+        [InlineKeyboardButton("📊 Reyting ko'rish", callback_data=f"atr_{tid}")],
+        [InlineKeyboardButton("✏️ Tahrirlash",      callback_data=f"atv_{tid}")],
         [back_btn("adm_archive")],
     ]
+    # 4096 dan oshmasligi uchun
+    if len(text) > 4000:
+        text = text[:4000] + "..."
     await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
 # ── STATISTIKA / REYTING ─────────────────────────────────────────────────────
