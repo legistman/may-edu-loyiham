@@ -258,26 +258,23 @@ async def send_payment_proof(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
 async def handle_payment_proof(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Faqat document (PDF/fayl) ko'rinishidagi cheklar uchun — rasmlar handle_photo_upload da"""
     if context.user_data.get("step") != "waiting_payment_proof": return False
     user = update.effective_user
-    photo = update.message.photo; doc = update.message.document
-    if not photo and not doc:
+    doc  = update.message.document
+    if not doc:
         await update.message.reply_text("Iltimos rasm yoki fayl yuboring.")
         return True
     context.user_data.clear()
-    await update.message.reply_text(
-        "✅ Chek qabul qilindi!\n\nAdmin 24 soat ichida ko'rib chiqadi. 🙏"
-    )
-    u = db.get_user(user.id); name = uname(u) if u else user.first_name
-    kb = [[
+    await update.message.reply_text("✅ Chek qabul qilindi!\n\nAdmin 24 soat ichida ko'rib chiqadi. 🙏")
+    u    = db.get_user(user.id)
+    name = uname(u) if u else user.first_name
+    kb   = [[
         InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"pay_ok_{user.id}"),
         InlineKeyboardButton("❌ Rad etish",  callback_data=f"pay_no_{user.id}"),
     ]]
-    cap = f"💎 Yangi to'lov!\n\n👤 {name}\n🆔 {user.id}\n📛 @{user.username or 'yoq'}"
-    if photo:
-        await context.bot.send_photo(ADMIN_ID, photo[-1].file_id, caption=cap, reply_markup=InlineKeyboardMarkup(kb))
-    else:
-        await context.bot.send_document(ADMIN_ID, doc.file_id, caption=cap, reply_markup=InlineKeyboardMarkup(kb))
+    cap = f"💎 Yangi to'lov (fayl)!\n\n👤 {name}\n🆔 {user.id}\n📛 @{user.username or 'yoq'}"
+    await context.bot.send_document(ADMIN_ID, doc.file_id, caption=cap, reply_markup=InlineKeyboardMarkup(kb))
     db.add_payment_request(user.id)
     return True
 
@@ -847,20 +844,43 @@ async def adm_archive_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── STATISTIKA / REYTING ─────────────────────────────────────────────────────
 async def adm_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
-    s = db.get_stats()
-    kb = [
-        [InlineKeyboardButton("🏆 Umumiy reyting",       callback_data="adm_rating_all")],
-        [InlineKeyboardButton("📝 Test bo'yicha reyting", callback_data="adm_rating_test")],
+    s   = db.get_stats()
+    now = datetime.now().strftime("%d.%m.%Y %H:%M")
+    kb  = [
+        [InlineKeyboardButton("🔄 Yangilash",                    callback_data="adm_stats")],
+        [InlineKeyboardButton("🏆 Umumiy reyting",               callback_data="adm_rating_all")],
+        [InlineKeyboardButton("📝 Test bo'yicha reyting",        callback_data="adm_rating_test")],
+        [InlineKeyboardButton("👥 So'nggi a'zolar",             callback_data="adm_last_users")],
         [back_btn("adm_back")],
     ]
     await q.edit_message_text(
-        f"📊 Statistika\n{'─'*24}\n"
-        f"👥 Jami: {s['total_users']}\n✅ Tasdiqlangan: {s['approved_users']}\n"
-        f"⭐️ Premium: {s['premium_users']}\n⏳ Kutayotgan: {s['pending_users']}\n\n"
-        f"📝 Testlar: {s['total_pdf_tests']}\n📚 Qo'llanmalar: {s['total_guides']}\n"
-        f"🏆 Jami natijalar: {s['total_results']}",
+        "📊 Statistika\n" + "━"*24 + "\n" +
+        f"🕐 {now}\n" + "━"*24 + "\n" +
+        f"👥 Jami: {s['total_users']}\n" +
+        f"✅ Tasdiqlangan: {s['approved_users']}\n" +
+        f"⭐️ Premium: {s['premium_users']}\n" +
+        f"⏳ Kutayotgan: {s['pending_users']}\n" +
+        f"🆕 Bugun: {s['today_users']}\n" +
+        "━"*24 + "\n" +
+        f"📝 Testlar: {s['total_pdf_tests']}\n" +
+        f"📚 Qo'llanmalar: {s['total_guides']}\n" +
+        f"🏆 Jami natijalar: {s['total_results']}\n" +
+        f"📈 Bugungi natijalar: {s['today_results']}",
         reply_markup=InlineKeyboardMarkup(kb)
     )
+
+async def adm_last_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    users = db.get_users_by_status(None)[:15]
+    icons = {"approved":"✅","premium":"⭐️","pending":"⏳","rejected":"❌","new":"🆕"}
+    parts = ["👥 So'nggi a'zolar:\n" + "━"*24]
+    for u in users:
+        ic   = icons.get(u["status"],"👤")
+        name = uname(u)
+        date = str(u.get("joined_at",""))[:10]
+        parts.append(f"{ic} {name} (@{u['username'] or 'yoq'}) — {date}")
+    kb = [[InlineKeyboardButton("⬅️ Statistika", callback_data="adm_stats")]]
+    await q.edit_message_text("\n".join(parts), reply_markup=InlineKeyboardMarkup(kb))
 
 async def adm_rating_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
@@ -993,14 +1013,47 @@ async def handle_pdf_or_guide(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("✅ Rasm yangilandi!", reply_markup=InlineKeyboardMarkup(kb))
 
 async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Rasm yuklash — start xabari uchun"""
-    if not is_admin(update.effective_user.id): return
-    if context.user_data.get("step") != "sm_edit_photo": return
-    photo_id = update.message.photo[-1].file_id
-    db.update_start_message(photo_id=photo_id)
-    context.user_data.clear()
-    kb = [[back_btn("adm_start_msg")]]
-    await update.message.reply_text("✅ Rasm yangilandi!", reply_markup=InlineKeyboardMarkup(kb))
+    """Barcha rasm xabarlari — to'lov cheki, start rasmi"""
+    uid  = update.effective_user.id
+    step = context.user_data.get("step","")
+
+    # 1. To'lov cheki (har qanday foydalanuvchi)
+    if step == "waiting_payment_proof":
+        user  = update.effective_user
+        photo = update.message.photo
+        context.user_data.clear()
+        await update.message.reply_text(
+            "✅ Chek qabul qilindi!\n\nAdmin 24 soat ichida ko'rib chiqadi. 🙏"
+        )
+        u    = db.get_user(user.id)
+        name = uname(u) if u else user.first_name
+        kb = [[
+            InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"pay_ok_{user.id}"),
+            InlineKeyboardButton("❌ Rad etish",  callback_data=f"pay_no_{user.id}"),
+        ]]
+        cap = (
+            f"💎 Yangi to'lov so'rovi!\n\n"
+            f"👤 {name}\n"
+            f"🆔 {user.id}\n"
+            f"📛 @{user.username or 'yoq'}"
+        )
+        await context.bot.send_photo(
+            ADMIN_ID, photo[-1].file_id,
+            caption=cap, reply_markup=InlineKeyboardMarkup(kb)
+        )
+        db.add_payment_request(user.id)
+        return
+
+    # 2. Start rasmi (faqat admin)
+    if not is_admin(uid): return
+
+    if step in ("sm_edit_photo", "set_startphoto"):
+        photo_id = update.message.photo[-1].file_id
+        db.update_start_message(photo_id=photo_id)
+        context.user_data.clear()
+        kb = [[InlineKeyboardButton("⚙️ Sozlamalarga", callback_data="adm_settings"),
+               back_btn("adm_back")]]
+        await update.message.reply_text("✅ Start rasmi yangilandi!", reply_markup=InlineKeyboardMarkup(kb))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  MATN XABARLARI
@@ -1045,6 +1098,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         db.add_user(uid, update.effective_user.username or "", update.effective_user.first_name, txt)
         context.user_data.clear()
+        # Adminga bildirishnoma
+        try:
+            uobj = update.effective_user
+            await context.bot.send_message(
+                ADMIN_ID,
+                f"🆕 Yangi foydalanuvchi ro'yxatdan o'tdi!\n\n"
+                f"👤 Ism-familiya: {txt}\n"
+                f"🆔 ID: {uid}\n"
+                f"📛 Username: @{uobj.username or 'yoq'}\n"
+                f"📱 Telegram: {uobj.first_name}"
+            )
+        except: pass
         await show_welcome(update, context)
         return
 
