@@ -216,10 +216,10 @@ async def premium_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     uid = q.from_user.id
     kb = [
-        [InlineKeyboardButton("📝 Testlar",          callback_data="menu_tests")],
-        [InlineKeyboardButton("📚 Qo'llanmalar",     callback_data="menu_guides")],
-        [InlineKeyboardButton("📊 Natijalarim",      callback_data="menu_results")],
-        [InlineKeyboardButton("📩 Adminga murojaat", callback_data="contact_admin")],
+        [InlineKeyboardButton("📝 Testlar",              callback_data="menu_tests")],
+        [InlineKeyboardButton("📚 Qo'llanmalar",         callback_data="menu_guides")],
+        [InlineKeyboardButton("📊 Statistika",           callback_data="user_stats")],
+        [InlineKeyboardButton("📩 Adminga murojaat",     callback_data="contact_admin")],
         [back_btn("back_welcome")],
     ]
     await q.edit_message_text(
@@ -500,31 +500,141 @@ async def show_guide(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(f"📖 {g['title']}\n\n{g['content']}"[:4000], reply_markup=InlineKeyboardMarkup(kb))
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  NATIJALAR
+#  STATISTIKA (FOYDALANUVCHI)
 # ═══════════════════════════════════════════════════════════════════════════════
-async def menu_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Statistika bosh menyusi"""
     q = update.callback_query; await q.answer()
-    results = db.get_user_pdf_results(q.from_user.id)
-    kb = [[back_btn("premium_menu")]]
+    uid  = q.from_user.id
+    prem = is_premium(uid)
+    back = "premium_menu" if prem else "free_menu"
+    kb   = [
+        [InlineKeyboardButton("👤 Shaxsiy natijalar",  callback_data="my_results")],
+        [InlineKeyboardButton("🏆 Ommaviy reyting",    callback_data="public_rating")],
+        [back_btn(back)],
+    ]
+    await q.edit_message_text(
+        "📊 Statistika bo'limi\n\n"
+        "👤 Shaxsiy natijalar — faqat o'z natijalaringiz\n"
+        "🏆 Ommaviy reyting — barcha ishtirokchilar reytingi",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+async def my_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Shaxsiy natijalar — har bir test bo'yicha alohida"""
+    q   = update.callback_query; await q.answer()
+    uid = q.from_user.id
+    prem = is_premium(uid)
+    back = "premium_menu" if prem else "free_menu"
+    tests = db.get_all_pdf_tests() if prem else db.get_free_pdf_tests()
+    kb = []
+    for t in tests:
+        kb.append([InlineKeyboardButton(f"📝 {t['title']}", callback_data=f"my_result_{t['id']}")])
+    if not tests:
+        kb.append([InlineKeyboardButton("📝 Testlarga o'tish", callback_data="menu_tests" if prem else "free_tests")])
+    kb.append([back_btn("user_stats")])
+    await q.edit_message_text(
+        "👤 Shaxsiy natijalar\n\nQaysi test natijasini ko'rmoqchisiz?",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+async def my_result_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Bitta test bo'yicha shaxsiy natija"""
+    q      = update.callback_query; await q.answer()
+    uid    = q.from_user.id
+    tid    = int(q.data.replace("my_result_", ""))
+    t      = db.get_pdf_test(tid)
+    if not t:
+        await q.answer("Test topilmadi!", show_alert=True); return
+    results = db.get_user_results_for_test(uid, tid)
+    kb = [[back_btn("my_results")]]
     if not results:
-        await q.edit_message_text("Hali test yechmagansiz.", reply_markup=InlineKeyboardMarkup(kb))
+        await q.edit_message_text(
+            f"📝 {t['title']}\n\nBu testni hali yechmagansiz.",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
         return
-    r = results[0]; wrong = r["total"] - r["correct"]
-    ball = round(r["correct"] * 3.1, 1); maxb = round(r["total"] * 3.1, 1)
-    pct  = round(r["correct"] / r["total"] * 100) if r["total"] else 0
+    # Eng yaxshi natija
+    best = max(results, key=lambda x: x["correct"])
+    last = results[0]
+    max_b = round(t["question_count"] * 3.1, 1)
     text = (
-        f"📊 Oxirgi test natijasi\n{'─'*26}\n"
-        f"📝 {r['test_title']}\n"
-        f"📋 Jami: {r['total']} ta\n✅ To'g'ri: {r['correct']} ta\n"
-        f"❌ Xato: {wrong} ta\n🏅 Ball: {ball} / {maxb}\n📈 Foiz: {pct}%\n"
+        f"👤 Shaxsiy natija\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📝 {t['title']}\n"
+        f"🔢 Jami urinish: {len(results)} marta\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏆 Eng yaxshi natija:\n"
+        f"  ✅ To'g'ri: {best['correct']}/{t['question_count']}\n"
+        f"  🏅 Ball: {round(best['correct']*3.1,1)} / {max_b}\n"
+        f"  📈 Foiz: {round(best['correct']/t['question_count']*100)}%\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🕐 Oxirgi urinish:\n"
+        f"  ✅ To'g'ri: {last['correct']}/{t['question_count']}\n"
+        f"  🏅 Ball: {round(last['correct']*3.1,1)} / {max_b}\n"
+        f"  📈 Foiz: {round(last['correct']/t['question_count']*100)}%\n"
     )
     if len(results) > 1:
-        text += "\n📌 Oldingi natijalar:\n"
-        for r2 in results[1:6]:
-            b2 = round(r2["correct"] * 3.1, 1)
-            p2 = round(r2["correct"] / r2["total"] * 100) if r2["total"] else 0
-            text += f"  • {r2['test_title']}: {b2} ball ({p2}%)\n"
+        text += f"━━━━━━━━━━━━━━━━━━━━━━\n📋 Barcha urinishlar:\n"
+        for i, r in enumerate(results[:5]):
+            ball = round(r["correct"]*3.1, 1)
+            pct  = round(r["correct"]/t["question_count"]*100)
+            date = str(r.get("taken_at",""))[:10]
+            text += f"  {i+1}. {ball} ball ({pct}%) — {date}\n"
     await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+
+async def public_rating(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ommaviy reyting — test tanlash"""
+    q    = update.callback_query; await q.answer()
+    uid  = q.from_user.id
+    prem = is_premium(uid)
+    tests = db.get_all_pdf_tests() if prem else db.get_free_pdf_tests()
+    kb = []
+    for t in tests:
+        kb.append([InlineKeyboardButton(f"🏆 {t['title']}", callback_data=f"pub_rating_{t['id']}")])
+    if not tests:
+        kb.append([InlineKeyboardButton("📝 Testlarga o'tish", callback_data="menu_tests" if prem else "free_tests")])
+    kb.append([back_btn("user_stats")])
+    await q.edit_message_text(
+        "🏆 Ommaviy reyting\n\nQaysi test reytingini ko'rmoqchisiz?",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+async def pub_rating_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Bitta test bo'yicha TOP 20 reyting"""
+    q   = update.callback_query; await q.answer()
+    tid = int(q.data.replace("pub_rating_", ""))
+    t   = db.get_pdf_test(tid)
+    if not t:
+        await q.answer("Test topilmadi!", show_alert=True); return
+    ratings = db.get_test_rating(tid)
+    kb = [[back_btn("public_rating")]]
+    if not ratings:
+        await q.edit_message_text(
+            f"🏆 {t['title']}\n\nHali hech kim bu testni yechmagan.",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+        return
+    medals = {0:"🥇", 1:"🥈", 2:"🥉"}
+    max_b  = round(t["question_count"] * 3.1, 1)
+    text   = (
+        f"🏆 Ommaviy reyting\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📝 {t['title']}\n"
+        f"👥 Ishtirokchilar: {len(ratings)} ta\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+    )
+    for i, r in enumerate(ratings[:20]):
+        medal = medals.get(i, f"{i+1}.")
+        ball  = round(r["correct"] * 3.1, 1)
+        pct   = round(r["correct"] / r["total"] * 100) if r["total"] else 0
+        name  = r.get("full_name") or r.get("first_name","?")
+        text += f"{medal} {name} — {ball}/{max_b} ball ({pct}%)\n"
+    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+
+# Eski menu_results — user_stats ga yo'naltiradi
+async def menu_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await user_stats(update, context)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  ADMIN PANEL
@@ -1377,6 +1487,11 @@ def main():
     app.add_handler(CallbackQueryHandler(menu_guides,        pattern=r"^menu_guides$"))
     app.add_handler(CallbackQueryHandler(show_guide,         pattern=r"^guide_\d+$"))
     app.add_handler(CallbackQueryHandler(menu_results,       pattern=r"^menu_results$"))
+    app.add_handler(CallbackQueryHandler(user_stats,          pattern=r"^user_stats$"))
+    app.add_handler(CallbackQueryHandler(my_results,          pattern=r"^my_results$"))
+    app.add_handler(CallbackQueryHandler(my_result_detail,    pattern=r"^my_result_\d+$"))
+    app.add_handler(CallbackQueryHandler(public_rating,       pattern=r"^public_rating$"))
+    app.add_handler(CallbackQueryHandler(pub_rating_detail,   pattern=r"^pub_rating_\d+$"))
 
     # Admin testlar
     app.add_handler(CallbackQueryHandler(adm_tests,          pattern=r"^adm_tests$"))
