@@ -103,13 +103,18 @@ async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📌 LEGISTMAN BOT — huquqiy bilimlar platformasi"
         )
 
-    kb = [[InlineKeyboardButton("ℹ️ Bot haqida ma'lumot", callback_data="about_bot")]]
     if prem:
-        kb.append([InlineKeyboardButton("⭐️ Premium bo'lim",    callback_data="premium_menu")])
+        kb = [
+            [InlineKeyboardButton("⭐️ Premium bo'lim",   callback_data="premium_menu")],
+            [InlineKeyboardButton("📩 Adminga murojaat",  callback_data="contact_admin")],
+        ]
     else:
-        kb.append([InlineKeyboardButton("🆓 Bepul versiya",      callback_data="free_menu")])
-        kb.append([InlineKeyboardButton("⭐️ Premium versiya",    callback_data="premium_info")])
-    kb.append([InlineKeyboardButton("📩 Adminga murojaat",       callback_data="contact_admin")])
+        kb = [
+            [InlineKeyboardButton("ℹ️ Bot haqida ma'lumot", callback_data="about_bot")],
+            [InlineKeyboardButton("🆓 Bepul versiya",        callback_data="free_menu")],
+            [InlineKeyboardButton("⭐️ Premium versiya",      callback_data="premium_info")],
+            [InlineKeyboardButton("📩 Adminga murojaat",     callback_data="contact_admin")],
+        ]
 
     if update.callback_query:
         await update.callback_query.edit_message_text(header, reply_markup=InlineKeyboardMarkup(kb))
@@ -815,8 +820,8 @@ async def adm_archive(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for t in tests:
         ic = "🆓" if t.get("is_free") else "⭐️"
         kb2.append([InlineKeyboardButton(f"{ic} {t['title']}", callback_data=f"arv_{t['id']}")])
-    kb2.append(back_btn("adm_tests"))
-    await q.edit_message_text("📦 Testlar arxivi — to'liq ma'lumot:", reply_markup=InlineKeyboardMarkup(kb2))
+    kb2.append([back_btn("adm_tests")])
+    await q.edit_message_text("📦 Testlar arxivi — kalit ko'rish:", reply_markup=InlineKeyboardMarkup(kb2))
 
 async def adm_archive_view(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
