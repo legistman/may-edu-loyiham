@@ -97,15 +97,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def do_register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     context.user_data["step"] = "waiting_fullname"
-    await q.edit_message_text(
-        "✍️ Ismingiz va familiyangizni to'liq kiriting:\n\n"
-        "📝 Masalan: Mallayev Ozodbek"
-    ) if not update.callback_query.message.photo else \
-    await context.bot.send_message(
-        q.from_user.id,
-        "✍️ Ismingiz va familiyangizni to'liq kiriting:\n\n"
-        "📝 Masalan: Mallayev Ozodbek"
-    )
+    msg = "✍️ Ismingiz va familiyangizni to'liq kiriting:\n\n📝 Masalan: Mallayev Ozodbek"
+    try:
+        await q.edit_message_text(msg)
+    except Exception:
+        await context.bot.send_message(q.from_user.id, msg)
 
 async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Kanalga a'zolikni qayta tekshirish"""
@@ -135,6 +131,8 @@ async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u    = db.get_user(uid)
     fn   = uname(u) if u else ""
     prem = is_pro(uid)
+
+    header2 = ""  # Keyinroq to'ldiriladi
 
     if prem:
         header = (
@@ -1771,7 +1769,7 @@ def main():
     app.add_handler(CallbackQueryHandler(adm_user_action,  pattern=r"^aua_(ok|prem|unprem|kick|reset)_\d+$"))
 
     # Admin umumiy
-    app.add_handler(CallbackQueryHandler(cb_handler, pattern=r"^(adm_|pdf_type_|guide_type_|set_|agv_|agt_|agd_|agdc_|agn_|agf_|sm_|do_register)"))
+    app.add_handler(CallbackQueryHandler(cb_handler, pattern=r"^(adm_|pdf_type_|guide_type_|set_|agv_|agt_|agd_|agdc_|agn_|agf_|sm_)"))
 
     # Fayllar
     app.add_handler(MessageHandler(filters.Document.PDF,                   handle_pdf_or_guide))
