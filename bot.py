@@ -17,16 +17,6 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 ADMIN_ID  = int(os.getenv("ADMIN_ID", "123456789"))
 
 def S(key):        return db.get_setting(key) or ""
-
-CHANNEL = "@legistman"  # Majburiy kanal
-
-async def check_channel(uid, bot):
-    """Foydalanuvchi kanalga a'zo ekanini tekshirish"""
-    try:
-        member = await bot.get_chat_member(CHANNEL, uid)
-        return member.status not in ("left", "kicked", "banned")
-    except:
-        return True  # Xato bo'lsa ruxsat ber
 def is_admin(uid): return uid == ADMIN_ID
 
 def is_pro(uid):
@@ -62,18 +52,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_admin_menu(update, context)
         return
 
-    # Kanalga a'zolikni tekshirish
-    if not await check_channel(user.id, context.bot):
-        kb = [[InlineKeyboardButton("📢 Kanalga a'zo bo'lish", url=f"https://t.me/{CHANNEL.lstrip('@')}")],
-              [InlineKeyboardButton("✅ A'zo bo'ldim, tekshirish", callback_data="check_join")]]
-        await update.message.reply_text(
-            f"⚠️ Botdan foydalanish uchun avval\n"
-            f"{CHANNEL} kanaliga a'zo bo'ling!\n\n"
-            f"A'zo bo'lgach '✅ A'zo bo'ldim' tugmasini bosing.",
-            reply_markup=InlineKeyboardMarkup(kb)
-        )
-        return
-
     ex = db.get_user(user.id)
     if ex and ex.get("full_name"):
         await show_welcome(update, context)
@@ -97,42 +75,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def do_register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     context.user_data["step"] = "waiting_fullname"
-    msg = "✍️ Ismingiz va familiyangizni to'liq kiriting:\n\n📝 Masalan: Mallayev Ozodbek"
-    try:
-        await q.edit_message_text(msg)
-    except Exception:
-        await context.bot.send_message(q.from_user.id, msg)
-
-async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Kanalga a'zolikni qayta tekshirish"""
-    q = update.callback_query; await q.answer()
-    uid = q.from_user.id
-    if await check_channel(uid, context.bot):
-        ex = db.get_user(uid)
-        if ex and ex.get("full_name"):
-            await show_welcome(update, context)
-        else:
-            context.user_data["step"] = "waiting_fullname"
-            sm = db.get_start_message()
-            intro = sm["text"] if sm else "Xush kelibsiz!"
-            reg_text = intro + "\n\n✍️ Ismingiz va familiyangizni to'liq kiriting:\n📝 Masalan: Mallayev Ozodbek"
-            if sm and sm.get("photo_id"):
-                await context.bot.send_photo(uid, photo=sm["photo_id"], caption=reg_text)
-                await q.delete_message()
-            else:
-                await q.edit_message_text(reg_text)
-    else:
-        kb = [[InlineKeyboardButton("📢 Kanalga a'zo bo'lish", url=f"https://t.me/{CHANNEL.lstrip('@')}")],
-              [InlineKeyboardButton("✅ A'zo bo'ldim, tekshirish", callback_data="check_join")]]
-        await q.answer("Hali a'zo bo'lmadingiz!", show_alert=True)
+    await q.edit_message_text(
+        "✍️ Ismingiz va familiyangizni to'liq kiriting:\n\n"
+        "📝 Masalan: Mallayev Ozodbek"
+    ) if not update.callback_query.message.photo else \
+    await context.bot.send_message(
+        q.from_user.id,
+        "✍️ Ismingiz va familiyangizni to'liq kiriting:\n\n"
+        "📝 Masalan: Mallayev Ozodbek"
+    )
 
 async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid  = update.effective_user.id if update.effective_user else update.callback_query.from_user.id
     u    = db.get_user(uid)
     fn   = uname(u) if u else ""
     prem = is_pro(uid)
-
-    header2 = ""  # Keyinroq to'ldiriladi
 
     if prem:
         header = (
@@ -159,11 +116,10 @@ async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("📩 Adminga murojaat",     callback_data="contact_admin")],
         ]
 
-    full_header = header + header2
     if update.callback_query:
-        await update.callback_query.edit_message_text(full_header, reply_markup=InlineKeyboardMarkup(kb))
+        await update.callback_query.edit_message_text(header, reply_markup=InlineKeyboardMarkup(kb))
     else:
-        await update.message.reply_text(full_header, reply_markup=InlineKeyboardMarkup(kb))
+        await update.message.reply_text(header, reply_markup=InlineKeyboardMarkup(kb))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  BOT HAQIDA
@@ -431,12 +387,9 @@ async def submit_test_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
     test_id = int(q.data.split("_")[2])
     test = db.get_pdf_test(test_id)
     n = test.get("question_count", 30) if test else 30
-    import time
-    context.user_data["step"]       = "waiting_answers"
-    context.user_data["tid"]        = test_id
-    context.user_data["tcnt"]       = n
-    context.user_data["test_start"] = time.time()
-    t_limit = int(S("test_time_limit") or "30")
+    context.user_data["step"] = "waiting_answers"
+    context.user_data["tid"]  = test_id
+    context.user_data["tcnt"] = n
     await q.edit_message_text(
         f"✏️ {n} ta javobni yuboring!\n\n"
         f"Faqat harflar ketma-ket (ABCD):\n"
@@ -637,7 +590,6 @@ async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb   = [
         [InlineKeyboardButton("👤 Shaxsiy natijalar",  callback_data="my_results")],
         [InlineKeyboardButton("🏆 Ommaviy reyting",    callback_data="public_rating")],
-        [InlineKeyboardButton("🎁 Do'st taklif qilish", callback_data="my_referral")],
         [back_btn(back)],
     ]
     await q.edit_message_text(
@@ -646,31 +598,6 @@ async def user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🏆 Ommaviy reyting — barcha ishtirokchilar reytingi",
         reply_markup=InlineKeyboardMarkup(kb)
     )
-
-async def my_referral(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Do'st taklif qilish bo'limi"""
-    q    = update.callback_query; await q.answer()
-    uid  = q.from_user.id
-    prem = is_pro(uid)
-    back = "user_stats"
-    count  = db.get_referral_count(uid)
-    needed = int(S("referral_needed") or "10")
-    left   = max(0, needed - (count % needed))
-    bot_info = await context.bot.get_me()
-    ref_link = f"https://t.me/{bot_info.username}?start=ref_{uid}"
-    text = (
-        f"🎁 Do'st taklif qilish\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📊 Siz taklif qilganlar: {count} ta\n"
-        f"🎯 Keyingi sovg'a uchun: yana {left} ta\n\n"
-        f"📌 Qoida:\n"
-        f"{needed} ta do'stingiz botga qo'shilsa — sizga\n"
-        f"7 kunlik PRO obuna sovg'a beriladi! 🎉\n\n"
-        f"🔗 Sizning taklif havolangiz:\n"
-        f"{ref_link}"
-    )
-    kb = [[back_btn(back)]]
-    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
 async def my_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Shaxsiy natijalar — har bir test bo'yicha alohida"""
@@ -1232,20 +1159,16 @@ async def sm_preview(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── SOZLAMALAR ───────────────────────────────────────────────────────────────
 async def adm_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
-    price    = S("pro_price"); card = S("card_number"); owner = S("card_owner")
-    t_limit  = S("test_time_limit") or "30"
-    ref_need = S("referral_needed") or "10"
-    sm       = db.get_start_message()
+    price = S("pro_price"); card = S("card_number"); owner = S("card_owner")
+    sm    = db.get_start_message()
     has_photo = "✅ Rasm bor" if sm and sm.get("photo_id") else "❌ Rasm yo'q"
     kb = [
-        [InlineKeyboardButton("💰 Narxni o'zgartirish",          callback_data="set_price")],
-        [InlineKeyboardButton("💳 Karta raqamini o'zgartirish",   callback_data="set_card")],
-        [InlineKeyboardButton("👤 Karta egasini o'zgartirish",    callback_data="set_owner")],
-        [InlineKeyboardButton("⏱ Test vaqt chegarasi",           callback_data="set_testtime")],
-        [InlineKeyboardButton("🎁 Referral soni (PRO uchun)",     callback_data="set_refcount")],
-        [InlineKeyboardButton("📝 Start xabarini tahrirlash",     callback_data="set_starttext")],
-        [InlineKeyboardButton("🖼 Start rasmini o'zgartirish",    callback_data="set_startphoto")],
-        [InlineKeyboardButton("🗑 Start rasmini o'chirish",       callback_data="set_startphoto_del")],
+        [InlineKeyboardButton("💰 Narxni o'zgartirish",         callback_data="set_price")],
+        [InlineKeyboardButton("💳 Karta raqamini o'zgartirish",  callback_data="set_card")],
+        [InlineKeyboardButton("👤 Karta egasini o'zgartirish",   callback_data="set_owner")],
+        [InlineKeyboardButton("📝 Start xabarini tahrirlash",    callback_data="set_starttext")],
+        [InlineKeyboardButton("🖼 Start rasmini o'zgartirish",   callback_data="set_startphoto")],
+        [InlineKeyboardButton("🗑 Start rasmini o'chirish",      callback_data="set_startphoto_del")],
         [back_btn("adm_back")],
     ]
     await q.edit_message_text(
@@ -1253,8 +1176,6 @@ async def adm_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💰 PRO obuna narxi: {price} so'm / 30 kun\n"
         f"💳 Karta: {card}\n"
         f"👤 Egasi: {owner}\n"
-        f"⏱ Test vaqt chegarasi: {t_limit} daqiqa\n"
-        f"🎁 PRO uchun taklif soni: {ref_need} ta\n"
         f"🖼 Start rasmi: {has_photo}",
         reply_markup=InlineKeyboardMarkup(kb)
     )
@@ -1385,30 +1306,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Admin reply
-    if step == "admin_reply" and is_admin(uid):
-        target_id   = context.user_data.get("reply_to_uid")
-        target_name = context.user_data.get("reply_to_name", "")
-        context.user_data.clear()
-        if not target_id:
-            await update.message.reply_text("❌ Xato: foydalanuvchi topilmadi. /admin")
-            return
-        try:
-            await context.bot.send_message(
-                target_id,
-                "📬 Admin javobi:\n━━━━━━━━━━━━━━━━━━━━━━\n" + txt
-            )
-            kb = [[InlineKeyboardButton("🔧 Admin panel", callback_data="adm_back")]]
-            await update.message.reply_text(
-                f"✅ Javob yuborildi → {target_name}",
-                reply_markup=InlineKeyboardMarkup(kb)
-            )
-        except Exception:
-            await update.message.reply_text(
-                "❌ Xabar yuborib bo'lmadi. Foydalanuvchi botni bloklagan bo'lishi mumkin."
-            )
-        return
-
+    # To'lov cheki
     if step == "waiting_payment_proof":
         await handle_payment_proof(update, context); return
 
@@ -1424,27 +1322,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         db.add_user(uid, update.effective_user.username or "", update.effective_user.first_name, txt)
-
-        # Referral saqlash
-        ref_id = context.user_data.get("ref_id")
-        if ref_id and not db.referral_exists(uid):
-            db.add_referral(ref_id, uid)
-            ref_count = db.get_referral_count(ref_id)
-            needed    = int(S("referral_needed") or "10")
-            if ref_count >= needed and ref_count % needed == 0:
-                # PRO obuna berish
-                from datetime import timedelta
-                exp = datetime.now(TASHKENT) + timedelta(days=7)
-                db.set_pro(ref_id, exp)
-                try:
-                    await context.bot.send_message(
-                        ref_id,
-                        f"🎁 Tabrik! {needed} ta do'stingiz botga qo'shildi!\n\n"
-                        f"Sovg'a sifatida sizga 7 kunlik PRO obuna berildi!\n"
-                        f"👑 PRO obuna: {exp.strftime('%d.%m.%Y')} gacha aktiv"
-                    )
-                except: pass
-
         context.user_data.clear()
         # Adminga bildirishnoma
         try:
@@ -1544,26 +1421,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = [[InlineKeyboardButton("⚙️ Sozlamalarga", callback_data="adm_settings"),
                InlineKeyboardButton("🔧 Admin panel",  callback_data="adm_back")]]
         await update.message.reply_text("✅ Start xabari yangilandi!", reply_markup=InlineKeyboardMarkup(kb))
-
-    elif step == "set_testtime":
-        try:
-            int(txt)
-            db.set_setting("test_time_limit", txt)
-            context.user_data.clear()
-            kb = [[InlineKeyboardButton("⚙️ Sozlamalarga", callback_data="adm_settings"), back_btn("adm_back")]]
-            await update.message.reply_text(f"✅ Vaqt chegarasi: {txt} daqiqa", reply_markup=InlineKeyboardMarkup(kb))
-        except:
-            await update.message.reply_text("Faqat raqam yozing. Masalan: 30")
-
-    elif step == "set_refcount":
-        try:
-            int(txt)
-            db.set_setting("referral_needed", txt)
-            context.user_data.clear()
-            kb = [[InlineKeyboardButton("⚙️ Sozlamalarga", callback_data="adm_settings"), back_btn("adm_back")]]
-            await update.message.reply_text(f"✅ Taklif soni: {txt} ta", reply_markup=InlineKeyboardMarkup(kb))
-        except:
-            await update.message.reply_text("Faqat raqam yozing. Masalan: 10")
 
     elif step == "set_price":
         db.set_setting("pro_price", txt)
@@ -1679,10 +1536,8 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "set_price":      "💰 Yangi narxni yozing (masalan: 349 000):",
             "set_card":       "💳 Yangi karta raqamini yozing:",
             "set_owner":      "👤 Yangi karta egasi ismini yozing:",
-            "set_starttext":  "📝 Yangi start xabari matnini yozing:",
+            "set_starttext":  "📝 Yangi start xabari matnini yozing:\n(Emoji va formatlash mumkin)",
             "set_startphoto": "🖼 Start uchun rasm yuboring:",
-            "set_testtime":   "⏱ Test vaqt chegarasini daqiqalarda yozing (masalan: 30):",
-            "set_refcount":   "🎁 PRO obuna uchun nechta do'st taklif qilish kerakligini yozing (masalan: 10):",
         }
         context.user_data["step"] = data
         await q.edit_message_text(hints.get(data,"Yangi qiymat:") + "\n\nBekor: /admin")
@@ -1694,28 +1549,6 @@ async def back_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ═══════════════════════════════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
-async def pro_expiry_reminder(context):
-    """PRO tugashiga 3 kun qolganida eslatma"""
-    from datetime import timedelta
-    users = db.get_users_by_status("pro")
-    for u in users:
-        exp = db.get_pro_expiry(u["user_id"])
-        if not exp: continue
-        days_left = (exp - datetime.now(TASHKENT)).days
-        if days_left == 3:
-            try:
-                await context.bot.send_message(
-                    u["user_id"],
-                    f"⏰ Eslatma!\n\n"
-                    f"👑 PRO obunangiz {exp.strftime('%d.%m.%Y')} da tugaydi\n"
-                    f"(3 kun qoldi)\n\n"
-                    f"Uzilmaslik uchun yangilang! 👇",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("👑 PRO obunani yangilash", callback_data="buy_pro")]
-                    ])
-                )
-            except: pass
-
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
@@ -1734,9 +1567,8 @@ def main():
     app.add_handler(CallbackQueryHandler(payment_action,     pattern=r"^pay_(ok|no)_\d+$"))
     app.add_handler(CallbackQueryHandler(contact_admin,      pattern=r"^contact_admin$"))
     app.add_handler(CallbackQueryHandler(admin_reply_prompt, pattern=r"^reply_\d+$"))
+    app.add_handler(CallbackQueryHandler(admin_reply_prompt, pattern=r"^reply_\d+$"))
     app.add_handler(CallbackQueryHandler(back_welcome,       pattern=r"^back_welcome$"))
-    app.add_handler(CallbackQueryHandler(check_join,          pattern=r"^check_join$"))
-    app.add_handler(CallbackQueryHandler(my_referral,         pattern=r"^my_referral$"))
 
     # Testlar
     app.add_handler(CallbackQueryHandler(menu_tests,         pattern=r"^menu_tests$"))
@@ -1769,19 +1601,13 @@ def main():
     app.add_handler(CallbackQueryHandler(adm_user_action,  pattern=r"^aua_(ok|prem|unprem|kick|reset)_\d+$"))
 
     # Admin umumiy
-    app.add_handler(CallbackQueryHandler(cb_handler, pattern=r"^(adm_|pdf_type_|guide_type_|set_|agv_|agt_|agd_|agdc_|agn_|agf_|sm_)"))
+    app.add_handler(CallbackQueryHandler(cb_handler, pattern=r"^(adm_|pdf_type_|guide_type_|set_|agv_|agt_|agd_|agdc_|agn_|agf_|sm_|do_register)"))
 
     # Fayllar
     app.add_handler(MessageHandler(filters.Document.PDF,                   handle_pdf_or_guide))
     app.add_handler(MessageHandler(filters.Document.ALL & ~filters.Document.PDF, handle_pdf_or_guide))
     app.add_handler(MessageHandler(filters.PHOTO,                          handle_photo_upload))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND,        handle_message))
-
-    # PRO eslatma (har kuni 10:00 da)
-    job_queue = app.job_queue
-    if job_queue:
-        from datetime import time as dtime
-        job_queue.run_daily(pro_expiry_reminder, time=dtime(hour=10, minute=0), name="pro_reminder")
 
     print("✅ Bot ishga tushdi!")
     app.run_polling()
