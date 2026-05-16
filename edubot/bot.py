@@ -1306,7 +1306,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # To'lov cheki
+    # Admin reply
+    if step == "admin_reply" and is_admin(uid):
+        target_id   = context.user_data.get("reply_to_uid")
+        target_name = context.user_data.get("reply_to_name", "")
+        context.user_data.clear()
+        if not target_id:
+            await update.message.reply_text("❌ Xato: foydalanuvchi topilmadi. /admin")
+            return
+        try:
+            await context.bot.send_message(
+                target_id,
+                "📬 Admin javobi:\n━━━━━━━━━━━━━━━━━━━━━━\n" + txt
+            )
+            kb = [[InlineKeyboardButton("🔧 Admin panel", callback_data="adm_back")]]
+            await update.message.reply_text(
+                f"✅ Javob yuborildi → {target_name}",
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
+        except Exception:
+            await update.message.reply_text(
+                "❌ Xabar yuborib bo'lmadi. Foydalanuvchi botni bloklagan bo'lishi mumkin."
+            )
+        return
+
     if step == "waiting_payment_proof":
         await handle_payment_proof(update, context); return
 
@@ -1566,7 +1589,6 @@ def main():
     app.add_handler(CallbackQueryHandler(send_payment_proof, pattern=r"^send_payment_proof$"))
     app.add_handler(CallbackQueryHandler(payment_action,     pattern=r"^pay_(ok|no)_\d+$"))
     app.add_handler(CallbackQueryHandler(contact_admin,      pattern=r"^contact_admin$"))
-    app.add_handler(CallbackQueryHandler(admin_reply_prompt, pattern=r"^reply_\d+$"))
     app.add_handler(CallbackQueryHandler(admin_reply_prompt, pattern=r"^reply_\d+$"))
     app.add_handler(CallbackQueryHandler(back_welcome,       pattern=r"^back_welcome$"))
 
