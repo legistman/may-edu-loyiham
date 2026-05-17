@@ -322,6 +322,40 @@ async def show_pdf_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [back("free_menu")],
             ])); return
 
+    # Ketma-ketlik tekshiruvi: oldingi testni yechmagan bo'lsa kiritmaymiz
+    prev_id = db.get_prev_test_id(test_id)
+    if prev_id and not db.user_completed_test(uid, prev_id):
+        prev_test = db.get_pdf_test(prev_id)
+        await q.edit_message_text(
+            f"⚠️ Ketma-ketlik buzildi!\n\n"
+            f"Bu testni ishlash uchun avval:\n"
+            f"📝 '{prev_test['title']}' testini yeching.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(f"📝 {prev_test['title']}", callback_data=f"pdf_test_{prev_id}")],
+                [back("free_menu" if not prem else "pro_menu")],
+            ])); return
+
+    # 30 daqiqa kutish tekshiruvi
+    last_attempt = db.get_last_attempt_time(uid, test_id)
+    if last_attempt:
+        from datetime import timezone
+        try:
+            last_dt = datetime.fromisoformat(str(last_attempt))
+            # Agar timezone yo'q bo'lsa qo'shamiz
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=TZ)
+            diff_min = (now() - last_dt).total_seconds() / 60
+            if diff_min < 30:
+                wait_min = int(30 - diff_min) + 1
+                await q.edit_message_text(
+                    f"⏳ Ushbu testni qayta ishlash uchun\n"
+                    f"{wait_min} daqiqa kutishingiz kerak.\n\n"
+                    f"Oxirgi urinish: {last_dt.strftime('%H:%M')}",
+                    reply_markup=InlineKeyboardMarkup([
+                        [back("free_menu" if not prem else "pro_menu")]
+                    ])); return
+        except: pass
+
     t_limit = test.get("time_limit", 30)
     tstart  = time.time()
     context.user_data.update({
@@ -377,16 +411,16 @@ async def show_pdf_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     [InlineKeyboardButton("✏️ Javob yuboraman", callback_data=f"submit_{test_id}")]]))
         except: pass
 
-    # Job queue orqali har daqiqada yangilash
+    # Job queue orqali har t_limit/10 daqiqada yangilash
+    interval_sec = max(60, (t_limit * 60) // 10)  # vaqtning 1/10 qismi
     if context.application.job_queue:
         job_name = f"timer_{uid}_{test_id}"
-        # Avvalgi jobni o'chirish (agar bo'lsa)
         for job in context.application.job_queue.get_jobs_by_name(job_name):
             job.schedule_removal()
         context.application.job_queue.run_repeating(
             update_timer,
-            interval=60,
-            first=60,
+            interval=interval_sec,
+            first=interval_sec,
             name=job_name,
             chat_id=chat_id,
             user_id=uid)
@@ -645,8 +679,13 @@ async def public_rating(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def pub_rating_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q   = update.callback_query; await q.answer()
-    tid = int(q.data.replace("pub_rating_", ""))
-    t   = db.get_pdf_test(tid)
+    # pub_rating_ID formatidan ID olish
+    raw = q.data.replace("pub_rating_", "")
+    try:
+        tid = int(raw)
+    except:
+        await q.answer("Xato!", show_alert=True); return
+    t = db.get_pdf_test(tid)
     if not t: return
     ratings = db.get_test_rating(tid)
     kb = [[back("public_rating")]]
@@ -654,14 +693,17 @@ async def pub_rating_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(
             f"🏆 {t['title']}\n\nHali hech kim bu testni yechmagan.",
             reply_markup=InlineKeyboardMarkup(kb)); return
-    medals = {0:"🥇",1:"🥈",2:"🥉"}
-    max_b  = round(t["question_count"] * 3.1, 1)
-    text   = f"🏆 {t['title']}\n{'━'*24}\n👥 Ishtirokchilar: {len(ratings)} ta\n{'━'*24}\n"
+    medals  = {0:"🥇",1:"🥈",2:"🥉"}
+    max_b   = round(t["question_count"] * 3.1, 1)
+    q_count = t["question_count"]
+    text    = f"🏆 {t['title']}\n{'━'*24}\n👥 Ishtirokchilar: {len(ratings)} ta\n{'━'*24}\n"
     for i, r in enumerate(ratings[:20]):
-        ball = round(r["correct"] * 3.1, 1)
-        pct  = round(r["correct"] / r["total"] * 100) if r["total"] else 0
-        name = r.get("full_name") or r.get("first_name","?")
-        text += f"{medals.get(i,f'{i+1}.')} {name} — {ball}/{max_b} ({pct}%)\n"
+        correct = r.get("correct") or 0
+        total   = r.get("total") or q_count
+        ball    = round(correct * 3.1, 1)
+        pct     = round(correct / total * 100) if total else 0
+        name    = r.get("full_name") or r.get("first_name","?")
+        text   += f"{medals.get(i,str(i+1)+'.')} {name} — {ball}/{max_b} ({pct}%)\n"
     await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
 # ═══════════════════════════════════════════════════════
