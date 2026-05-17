@@ -1133,8 +1133,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🆔 ID: {uid}\n"
                 f"📛 @{tg_user}")
         except: pass
+        except: pass
+        await show_welcome(update, context)
         return
-
     # To'lov cheki (fayl)
     if step == "waiting_proof":
         doc = update.message.document
