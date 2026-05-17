@@ -51,6 +51,12 @@ class Database:
             inviter_id INTEGER,
             invited_id INTEGER UNIQUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+        c.execute("""CREATE TABLE IF NOT EXISTS points (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL,
+            amount     INTEGER NOT NULL,
+            reason     TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
         c.execute("""CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY, value TEXT NOT NULL)""")
         c.execute("""CREATE TABLE IF NOT EXISTS start_message (
@@ -250,6 +256,39 @@ Siz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imk
             WHERE r.correct=(SELECT MAX(r2.correct) FROM pdf_results r2 WHERE r2.user_id=r.user_id)
             GROUP BY r.user_id ORDER BY r.correct DESC""").fetchall()
         return [dict(r) for r in rows]
+
+    def get_last_attempt_time(self, user_id, test_id):
+        """Foydalanuvchining oxirgi urinish vaqti"""
+        r = self.conn.execute(
+            "SELECT taken_at FROM pdf_results WHERE user_id=? AND test_id=? ORDER BY taken_at DESC LIMIT 1",
+            (user_id, test_id)).fetchone()
+        return r["taken_at"] if r else None
+
+    def user_completed_test(self, user_id, test_id):
+        """Foydalanuvchi bu testni yechdimi?"""
+        r = self.conn.execute(
+            "SELECT id FROM pdf_results WHERE user_id=? AND test_id=?",
+            (user_id, test_id)).fetchone()
+        return r is not None
+
+    def get_first_test_id(self):
+        """Birinchi (eng eski) test ID si"""
+        r = self.conn.execute(
+            "SELECT id FROM pdf_tests ORDER BY id ASC LIMIT 1").fetchone()
+        return r["id"] if r else None
+
+    def get_test_order(self, test_id):
+        """Testning tartib raqami (1, 2, 3...)"""
+        r = self.conn.execute(
+            "SELECT COUNT(*) FROM pdf_tests WHERE id <= ?", (test_id,)).fetchone()
+        return r[0] if r else 1
+
+    def get_prev_test_id(self, test_id):
+        """Testdan oldingi test ID si"""
+        r = self.conn.execute(
+            "SELECT id FROM pdf_tests WHERE id < ? ORDER BY id DESC LIMIT 1",
+            (test_id,)).fetchone()
+        return r["id"] if r else None
 
     def get_user_test_count(self, user_id):
         r = self.conn.execute(
