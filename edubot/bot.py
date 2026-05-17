@@ -323,25 +323,73 @@ async def show_pdf_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ])); return
 
     t_limit = test.get("time_limit", 30)
+    tstart  = time.time()
     context.user_data.update({
         "step": "waiting_answers", "tid": test_id,
-        "tcnt": test["question_count"], "tstart": time.time()
+        "tcnt": test["question_count"], "tstart": tstart
     })
     await context.bot.send_document(
         q.message.chat_id, test["file_id"],
         caption=f"📝 {test['title']}\n❓ Savollar: {test['question_count']} ta\n⏱ Vaqt: {t_limit} daqiqa\n\nTestni yechib bo'lgach javob yuboring.",
         protect_content=True)
-    # Vaqt sanash xabari
-    minutes = t_limit
-    time_text = (
-        f"⏱ Test vaqti: {minutes} daqiqa\n\n"
-        f"{'🟩' * min(minutes//5, 10)} {minutes} daqiqa\n\n"
-        f"Tayyor bo'lganingizda javob yuboring."
-    )
-    await context.bot.send_message(
-        q.message.chat_id, time_text,
+
+    # Dastlabki timer xabari
+    def make_timer_text(remaining_min):
+        total   = t_limit
+        elapsed = total - remaining_min
+        filled  = max(0, min(10, int((elapsed / total) * 10)))
+        empty   = 10 - filled
+        bar     = "🟥" * filled + "🟩" * empty
+        if remaining_min > 0:
+            return (
+                f"⏱ Qolgan vaqt: {remaining_min} daqiqa\n"
+                f"{bar}\n\n"
+                f"Javob yuborishga shoshilmang, vaqtingiz bor."
+            )
+        else:
+            return "⏰ Vaqt tugadi!"
+
+    sent_msg = await context.bot.send_message(
+        q.message.chat_id,
+        make_timer_text(t_limit),
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("✏️ Javob yuboraman", callback_data=f"submit_{test_id}")]]))
+
+    # Har daqiqada timer yangilanadi
+    msg_id  = sent_msg.message_id
+    chat_id = q.message.chat_id
+
+    async def update_timer(ctx):
+        elapsed_min = int((time.time() - tstart) / 60)
+        remaining   = t_limit - elapsed_min
+        if remaining <= 0:
+            try:
+                await ctx.bot.edit_message_text(
+                    "⏰ Vaqt tugadi!\n\nJavobingiz qabul qilinmaydi.",
+                    chat_id=chat_id, message_id=msg_id)
+            except: pass
+            return
+        try:
+            await ctx.bot.edit_message_text(
+                make_timer_text(remaining),
+                chat_id=chat_id, message_id=msg_id,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("✏️ Javob yuboraman", callback_data=f"submit_{test_id}")]]))
+        except: pass
+
+    # Job queue orqali har daqiqada yangilash
+    if context.application.job_queue:
+        job_name = f"timer_{uid}_{test_id}"
+        # Avvalgi jobni o'chirish (agar bo'lsa)
+        for job in context.application.job_queue.get_jobs_by_name(job_name):
+            job.schedule_removal()
+        context.application.job_queue.run_repeating(
+            update_timer,
+            interval=60,
+            first=60,
+            name=job_name,
+            chat_id=chat_id,
+            user_id=uid)
 
 async def submit_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
@@ -414,6 +462,12 @@ async def handle_test_answers(update: Update, context: ContextTypes.DEFAULT_TYPE
     else: baho = "💪 Ko'proq mashq kerak"
 
     prem = is_pro(uid)
+    # Timer jobni to'xtatish
+    if context.application.job_queue:
+        job_name = f"timer_{uid}_{test_id}"
+        for job in context.application.job_queue.get_jobs_by_name(job_name):
+            job.schedule_removal()
+
     db.save_pdf_result(uid, test_id, correct, n, clean)
 
     # Nishon tekshiruvi
