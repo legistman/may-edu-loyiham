@@ -44,15 +44,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     context.user_data.clear()
 
-    # Referral argument
-    if context.args:
-        arg = context.args[0]
-        if arg.startswith("ref_"):
-            try:
-                rid = int(arg[4:])
-                if rid != user.id: context.user_data["ref_id"] = rid
-            except: pass
-
     if is_admin(user.id):
         db.add_user(user.id, user.username or "", user.first_name, user.first_name)
         await show_admin_menu(update, context); return
@@ -175,7 +166,6 @@ async def free_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📝 TESTLAR",          callback_data="free_tests")],
         [InlineKeyboardButton("📚 QO'LLANMALAR",     callback_data="free_guides")],
         [InlineKeyboardButton("📊 Statistika",       callback_data="user_stats")],
-        [InlineKeyboardButton("🎁 Do'st taklif",     callback_data="my_referral")],
         [InlineKeyboardButton("👑 PRO olish",         callback_data="buy_pro")],
         [InlineKeyboardButton("📩 Adminga murojaat", callback_data="contact_admin")],
         [back("back_welcome")],
@@ -225,7 +215,6 @@ async def pro_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📝 Testlar",          callback_data="pro_tests")],
         [InlineKeyboardButton("📚 Qo'llanmalar",     callback_data="pro_guides")],
         [InlineKeyboardButton("📊 Statistika",       callback_data="user_stats")],
-        [InlineKeyboardButton("🎁 Do'st taklif",     callback_data="my_referral")],
         [InlineKeyboardButton("📩 Adminga murojaat", callback_data="contact_admin")],
         [back("back_welcome")],
     ]
@@ -707,30 +696,6 @@ async def pub_rating_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
 # ═══════════════════════════════════════════════════════
-#  REFERRAL
-# ═══════════════════════════════════════════════════════
-async def my_referral(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q    = update.callback_query; await q.answer()
-    uid  = q.from_user.id
-    prem = is_pro(uid)
-    back_cb = "pro_menu" if prem else "free_menu"
-    count   = db.get_referral_count(uid)
-    needed  = int(S("ref_needed","10"))
-    left    = needed - (count % needed) if count % needed != 0 else 0
-    bot_me  = await context.bot.get_me()
-    link    = f"https://t.me/{bot_me.username}?start=ref_{uid}"
-    text = (
-        f"🎁 Do'st taklif tizimi\n{'━'*24}\n\n"
-        f"📊 Siz taklif qilganlar: {count} ta\n"
-        f"🎯 Keyingi sovg'a uchun: {left} ta qoldi\n\n"
-        f"📌 Qoida:\n"
-        f"{needed} ta do'stingiz botga qo'shilsa —\n"
-        f"sizga 7 kunlik 👑 PRO obuna sovg'a! 🎉\n\n"
-        f"🔗 Taklif havolangiz:\n{link}"
-    )
-    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup([[back(back_cb)]]))
-
-# ═══════════════════════════════════════════════════════
 #  ADMINGA MUROJAAT
 # ═══════════════════════════════════════════════════════
 async def contact_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -964,15 +929,13 @@ async def adm_user_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u   = db.get_user(tid)
     if not u: return
     exp  = db.get_pro_expiry(tid)
-    refs = db.get_referral_count(tid)
     badges, cnt = db.get_user_badges(tid)
     text = (
         f"👤 {uname(u)}\n🆔 {u['user_id']}\n"
         f"📛 @{u['username'] or 'yoq'}\n"
         f"📌 Status: {u['status']}\n"
         f"📊 Yechgan testlar: {cnt} ta\n"
-        f"🎁 Taklif qilinganlar: {refs} ta\n"
-    )
+        )
     if badges: text += f"🏅 Nishonlar: {' '.join(badges)}\n"
     if exp: text += f"👑 PRO: {exp.strftime('%d.%m.%Y')} gacha\n"
     kb = []
@@ -1201,21 +1164,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "To'liq ism va familiyangizni kiriting.\nMasalan: Mallayev Ozodbek"); return
         db.add_user(uid, update.effective_user.username or "", update.effective_user.first_name, txt)
-        # Referral
-        ref_id = context.user_data.get("ref_id")
-        if ref_id and not db.referral_exists(uid):
-            db.add_referral(ref_id, uid)
-            ref_count = db.get_referral_count(ref_id)
-            needed    = int(S("ref_needed","10"))
-            if ref_count >= needed and ref_count % needed == 0:
-                exp = now() + timedelta(days=7)
-                db.set_pro(ref_id, exp)
-                try:
-                    await context.bot.send_message(
-                        ref_id,
-                        f"🎁 Tabrik! {needed} ta do'stingiz qo'shildi!\n"
-                        f"7 kunlik 👑 PRO obuna sovg'a! {exp.strftime('%d.%m.%Y')} gacha.")
-                except: pass
+        # Referral tizimi olib tashlandi
         context.user_data.clear()
         # Adminga bildirishnoma
         try:
@@ -1551,7 +1500,6 @@ def main():
     app.add_handler(CallbackQueryHandler(payment_action,  pattern=r"^pay_(ok|no)_\d+$"))
     app.add_handler(CallbackQueryHandler(contact_admin,   pattern=r"^contact_admin$"))
     app.add_handler(CallbackQueryHandler(admin_reply_prompt, pattern=r"^reply_\d+$"))
-    app.add_handler(CallbackQueryHandler(my_referral,     pattern=r"^my_referral$"))
 
     # Testlar
     app.add_handler(CallbackQueryHandler(show_pdf_test,      pattern=r"^pdf_test_\d+$"))
