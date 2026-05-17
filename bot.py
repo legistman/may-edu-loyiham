@@ -331,8 +331,15 @@ async def show_pdf_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         q.message.chat_id, test["file_id"],
         caption=f"📝 {test['title']}\n❓ Savollar: {test['question_count']} ta\n⏱ Vaqt: {t_limit} daqiqa\n\nTestni yechib bo'lgach javob yuboring.",
         protect_content=True)
+    # Vaqt sanash xabari
+    minutes = t_limit
+    time_text = (
+        f"⏱ Test vaqti: {minutes} daqiqa\n\n"
+        f"{'🟩' * min(minutes//5, 10)} {minutes} daqiqa\n\n"
+        f"Tayyor bo'lganingizda javob yuboring."
+    )
     await context.bot.send_message(
-        q.message.chat_id, f"⏱ Sizda {t_limit} daqiqa bor. Tayyor bo'ldingizmi?",
+        q.message.chat_id, time_text,
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("✏️ Javob yuboraman", callback_data=f"submit_{test_id}")]]))
 
@@ -361,23 +368,32 @@ async def handle_test_answers(update: Update, context: ContextTypes.DEFAULT_TYPE
     t_limit = (test.get("time_limit", 30) if test else 30)
 
     # Vaqt tekshiruvi
-    elapsed = (time.time() - tstart) / 60
+    elapsed     = (time.time() - tstart) / 60
+    elapsed_min = round(elapsed, 1)
+    remaining   = max(0, round(t_limit - elapsed))
+
     if elapsed > t_limit:
         context.user_data.clear()
         prem = is_pro(uid)
         kb = [[InlineKeyboardButton("📝 Yana test", callback_data="pro_tests" if prem else "free_tests"),
                InlineKeyboardButton("🏠 Bosh menyu", callback_data="back_welcome")]]
         await update.message.reply_text(
-            f"⏰ Vaqt tugadi! ({t_limit} daqiqa)\n\nJavobingiz qabul qilinmadi.\nQaytadan urinib ko'ring.",
+            f"⏰ Vaqt tugadi! ({t_limit} daqiqa)\n\n"
+            f"Javobingiz qabul qilinmadi.\nQaytadan urinib ko'ring.",
             reply_markup=InlineKeyboardMarkup(kb))
         return True
 
     clean = re.sub(r"[^ABCD]", "", update.message.text.strip().upper())
     if len(clean) != n:
-        remaining = round(t_limit - elapsed)
+        # Qolgan vaqtni vizual ko'rsatish
+        bars_done = max(0, min(10, int((elapsed / t_limit) * 10)))
+        bars_left = 10 - bars_done
+        timer_bar = "🟥" * bars_done + "🟩" * bars_left
         await update.message.reply_text(
-            f"⚠️ {len(clean)} ta javob yubordingiz, {n} ta kerak.\n"
-            f"⏱ Qolgan vaqt: ~{remaining} daqiqa\n\nQaytadan yuboring:")
+            f"⚠️ {len(clean)} ta javob, {n} ta kerak.\n\n"
+            f"⏱ {timer_bar}\n"
+            f"Sarflangan: {elapsed_min} daq | Qolgan: ~{remaining} daq\n\n"
+            f"Qaytadan yuboring:")
         return True
 
     key     = re.sub(r"[^ABCD]", "", (db.get_pdf_test(test_id) or {}).get("answer_key","").upper())
@@ -1107,13 +1123,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.clear()
         # Adminga bildirishnoma
         try:
+            tg_name = update.effective_user.first_name or ""
+            tg_user = update.effective_user.username or "yoq"
             await context.bot.send_message(
                 ADMIN_ID,
-                f"🆕 Yangi a'zo!\n{'━'*20}\n"
-                f"👤 {txt}\n🆔 {uid}\n"
-                f"📛 @{update.effective_user.username or 'yoq'}")
+                "🆕 Yangi a'zo!\n" + "━"*20 + "\n"
+                f"👤 Kiritilgan ism: {txt}\n"
+                f"📱 Telegram ismi: {tg_name}\n"
+                f"🆔 ID: {uid}\n"
+                f"📛 @{tg_user}")
         except: pass
-        await show_welcome(update, context)
         return
 
     # To'lov cheki (fayl)
