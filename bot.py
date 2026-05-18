@@ -174,12 +174,57 @@ async def free_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def free_tests_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
-    tests = db.get_free_pdf_tests()
-    kb = [[InlineKeyboardButton(f"📝 {t['title']}", callback_data=f"pdf_test_{t['id']}")] for t in tests]
-    if not tests: kb.append([InlineKeyboardButton("👑 PRO olish", callback_data="buy_pro")])
+    # Barcha testlar ko'rinadi — bepul ham, PRO ham
+    all_tests = db.get_all_pdf_tests()
+    kb = []
+    for t in all_tests:
+        if t.get("is_free"):
+            kb.append([InlineKeyboardButton(f"🆓 {t['title']}", callback_data=f"pdf_test_{t['id']}")])
+        else:
+            kb.append([InlineKeyboardButton(f"🔒 {t['title']}", callback_data=f"pro_locked_{t['id']}")])
+    if not all_tests:
+        kb.append([InlineKeyboardButton("👑 PRO olish", callback_data="buy_pro")])
     kb.append([back("free_menu")])
-    await q.edit_message_text("📝 Bepul testlar:" if tests else "Hozircha bepul testlar yo'q.",
-                              reply_markup=InlineKeyboardMarkup(kb))
+    await q.edit_message_text(
+        "📝 Testlar ro'yxati\n\n🆓 Bepul  |  🔒 PRO obuna kerak",
+        reply_markup=InlineKeyboardMarkup(kb))
+
+async def pro_locked_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Bepul foydalanuvchi PRO testga kirishga uringanda marketing xabari"""
+    q = update.callback_query; await q.answer()
+    uid = q.from_user.id
+    if is_pro(uid) or is_approved(uid):
+        # Aslida PRO — to'g'ri testga yo'naltirish
+        test_id = int(q.data.replace("pro_locked_", ""))
+        q.data  = f"pdf_test_{test_id}"
+        await show_pdf_test(update, context)
+        return
+    price = S("pro_price","349 000")
+    msg = (
+        "🔒 Bu test PRO obuna uchun\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Siz hozircha bepul versiyadan foydalanmoqdasiz.\n\n"
+        "❌ Bepul versiyada:\n"
+        "• Faqat cheklangan testlar\n"
+        "• Xato tahlilisiz natija\n"
+        "• To'g'ri javoblar ko'rsatilmaydi\n\n"
+        "✅ PRO obuna bilan:\n"
+        "• Barcha testlarga to'liq kirish\n"
+        "• Har bir xato savol ko'rsatiladi\n"
+        "• To'g'ri javoblar kaliti beriladi\n"
+        "• Shaxsiy reyting va tahlil\n"
+        "• Barcha qo'llanmalar\n\n"
+        f"💰 Narx: atigi {price} so'm / 30 kun\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "Huquq sohasida professional bo'lish\n"
+        "uchun eng to'g'ri qaror! ⚖️"
+    )
+    await q.edit_message_text(
+        msg,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("👑 PRO obuna olish", callback_data="buy_pro")],
+            [InlineKeyboardButton("⬅️ Orqaga",          callback_data="free_tests")],
+        ]))
 
 async def free_guides_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
@@ -388,8 +433,19 @@ async def show_pdf_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if remaining <= 0:
             try:
                 await ctx.bot.edit_message_text(
-                    "⏰ Vaqt tugadi!\n\nJavobingiz qabul qilinmaydi.",
+                    "⏰ Vaqt tugadi!",
                     chat_id=chat_id, message_id=msg_id)
+            except: pass
+            # Foydalanuvchiga alohida eslatma xabari
+            try:
+                await ctx.bot.send_message(
+                    chat_id,
+                    f"⏰ Test vaqti tugadi!\n\n"
+                    f"Javobingiz qabul qilinmadi.\n"
+                    f"Qaytadan urinib ko'ring! 💪",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("📝 Qaytadan ishlash", callback_data="free_tests")]
+                    ]))
             except: pass
             return
         try:
@@ -546,9 +602,31 @@ async def handle_test_answers(update: Update, context: ContextTypes.DEFAULT_TYPE
             msg = (f"💪 {fn}, boshlash qiyin — davom etish oson!\n\n"
                    f"👑 PRO bilan xatolaringizdan o'rganing:\n🔍 Batafsil tahlil\n📚 Maxsus qo'llanmalar\n\n"
                    f"💰 {price} so'm / 30 kun")
+        # Bepul foydalanuvchiga KUCHLI marketing xabari
+        xato_savollar = [i+1 for i,(u,k) in enumerate(zip(clean,key)) if u!=k]
+        xato_str = ", ".join(str(x) for x in xato_savollar[:5])
+        if len(xato_savollar) > 5:
+            xato_str += f" va yana {len(xato_savollar)-5} ta..."
+        marketing = (
+            f"🔍 Siz {wrong} ta savolda xato qildingiz\n"
+            f"({xato_str})\n\n"
+            f"Lekin qaysi javob to'g'ri ekanini\n"
+            f"bilmoqchimisiz? 🤔\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👑 PRO obuna bilan HOZIROQ biling:\n\n"
+            f"✅ Har bir xato savol ko'rsatiladi\n"
+            f"✅ To'g'ri javoblar kaliti taqdim etiladi\n"
+            f"✅ Keyingi testlarda shu xatoni qaytarmaysiz\n"
+            f"✅ Barcha testlar + qo'llanmalar ochiladi\n\n"
+            f"💰 {S('pro_price','349 000')} so'm / 30 kun\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚖️ Bilim — kelajagingizga investitsiya!"
+        )
         await update.message.reply_text(
-            msg, reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("👑 PRO olish — hoziroq!", callback_data="buy_pro")]]))
+            marketing,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("👑 PRO obuna — javoblarni ko'rish!", callback_data="buy_pro")],
+            ]))
 
     if new_badge:
         await update.message.reply_text(f"🎉 Tabrik! Yangi nishon oldingiz:\n{new_badge}")
@@ -948,6 +1026,7 @@ async def adm_user_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if u["status"] not in ("rejected","new"):
         kb.append([InlineKeyboardButton("🚫 Botdan chiqarish", callback_data=f"aua_kick_{tid}")])
     kb.append([InlineKeyboardButton("🔄 Qayta ro'yxatdan o'tkazish", callback_data=f"aua_reset_{tid}")])
+    kb.append([InlineKeyboardButton("🗑 Barcha ma'lumotlarni tozalash", callback_data=f"aua_wipe_{tid}")])
     kb.append([back("aul_all")])
     await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
 
@@ -983,6 +1062,11 @@ async def adm_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try: await context.bot.send_message(tid, "🔄 Ma'lumotlaringiz o'chirildi. /start bosing.")
         except: pass
         msg = "🔄 Reset qilindi!"
+    elif action == "wipe":
+        db.wipe_user(tid)
+        try: await context.bot.send_message(tid, "🗑 Barcha ma'lumotlaringiz o'chirildi. /start bosib qayta boshlang.")
+        except: pass
+        msg = "🗑 Barcha ma'lumotlar o'chirildi!"
     await q.answer(msg, show_alert=True)
     q.data = f"aud_{tid}"; await adm_user_detail(update, context)
 
@@ -1176,7 +1260,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"👤 Kiritilgan ism: {txt}\n"
                 f"📱 Telegram ismi: {tg_name}\n"
                 f"🆔 ID: {uid}\n"
-                f"📛 @{tg_user}")
+                f"📛 @{tg_user}",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(f"💬 {txt} ga xabar yuborish",
+                                         callback_data=f"reply_{uid}")]
+                ]))
         except: pass
         await show_welcome(update, context)
         return
@@ -1272,16 +1360,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"✅ Test qo'shildi!\n📝 {title}\n❓ {n} savol\n⏱ {t_limit} daqiqa",
             reply_markup=InlineKeyboardMarkup(kb))
+        # Barcha foydalanuvchilarga bildirishnoma
+        all_users = db.get_all_users()
+        sent = 0
+        for u in all_users:
+            if u["status"] in ("approved","pro","new") and u.get("full_name"):
+                try:
+                    await context.bot.send_message(
+                        u["user_id"],
+                        f"🔔 Yangi test qo'shildi!\n\n"
+                        f"📝 {title}\n"
+                        f"❓ {n} ta savol\n"
+                        f"⏱ Vaqt: {t_limit} daqiqa\n\n"
+                        f"Hoziroq ishlang! 👇",
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("📝 Testga o'tish", callback_data="free_tests")]
+                        ]))
+                    sent += 1
+                except: pass
+        await update.message.reply_text(f"📢 {sent} ta foydalanuvchiga xabar yuborildi.")
 
     elif step == "rename_test":
         tid = context.user_data["edit_id"]
         db.update_pdf_test(tid, title=txt)
         context.user_data.clear()
-        q_fake = type('obj', (object,), {'data': f"atv_{tid}"})()
-        update.callback_query = q_fake
-        kb = [[InlineKeyboardButton("📝 Testga qaytish", callback_data=f"atv_{tid}"),
-               InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]
-        await update.message.reply_text(f"✅ Nom yangilandi: {txt}", reply_markup=InlineKeyboardMarkup(kb))
+        kb = [
+            [InlineKeyboardButton("📝 Testni ko'rish", callback_data=f"atv_{tid}")],
+            [InlineKeyboardButton("🔧 Admin panel",    callback_data="adm_back")],
+        ]
+        await update.message.reply_text(
+            f"✅ Muvaffaqiyatli!\nTest nomi yangilandi: {txt}",
+            reply_markup=InlineKeyboardMarkup(kb))
 
     elif step == "update_key":
         n     = context.user_data.get("edit_cnt",30)
@@ -1291,9 +1400,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tid = context.user_data["edit_id"]
         db.update_pdf_test(tid, answer_key=clean)
         context.user_data.clear()
-        kb = [[InlineKeyboardButton("📝 Testga qaytish", callback_data=f"atv_{tid}"),
-               InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]
-        await update.message.reply_text("✅ Kalit yangilandi!", reply_markup=InlineKeyboardMarkup(kb))
+        kb = [
+            [InlineKeyboardButton("📝 Testni ko'rish", callback_data=f"atv_{tid}")],
+            [InlineKeyboardButton("🔧 Admin panel",    callback_data="adm_back")],
+        ]
+        await update.message.reply_text(
+            f"✅ Muvaffaqiyatli!\nJavob kaliti yangilandi.",
+            reply_markup=InlineKeyboardMarkup(kb))
 
     elif step == "update_time":
         try:
@@ -1301,9 +1414,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tid = context.user_data["edit_id"]
             db.update_pdf_test(tid, time_limit=t)
             context.user_data.clear()
-            kb = [[InlineKeyboardButton("📝 Testga qaytish", callback_data=f"atv_{tid}"),
-                   InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]
-            await update.message.reply_text(f"✅ Vaqt yangilandi: {t} daqiqa", reply_markup=InlineKeyboardMarkup(kb))
+            kb = [
+                [InlineKeyboardButton("📝 Testni ko'rish", callback_data=f"atv_{tid}")],
+                [InlineKeyboardButton("🔧 Admin panel",    callback_data="adm_back")],
+            ]
+            await update.message.reply_text(
+                f"✅ Muvaffaqiyatli!\nTest vaqti: {t} daqiqa",
+                reply_markup=InlineKeyboardMarkup(kb))
         except:
             await update.message.reply_text("Faqat raqam yozing.")
 
@@ -1323,30 +1440,48 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         gid = context.user_data["edit_id"]
         db.update_guide(gid, title=txt)
         context.user_data.clear()
-        kb = [[InlineKeyboardButton("📖 Qo'llanmaga", callback_data=f"agv_{gid}"),
-               InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]
-        await update.message.reply_text(f"✅ Nom yangilandi: {txt}", reply_markup=InlineKeyboardMarkup(kb))
+        kb = [
+            [InlineKeyboardButton("📖 Qo'llanmani ko'rish", callback_data=f"agv_{gid}")],
+            [InlineKeyboardButton("🔧 Admin panel",           callback_data="adm_back")],
+        ]
+        await update.message.reply_text(
+            f"✅ Muvaffaqiyatli!\nQo'llanma nomi yangilandi: {txt}",
+            reply_markup=InlineKeyboardMarkup(kb))
 
     elif step == "edit_guide_content":
         gid = context.user_data["edit_id"]
         db.update_guide(gid, content=txt)
         context.user_data.clear()
-        kb = [[InlineKeyboardButton("📖 Qo'llanmaga", callback_data=f"agv_{gid}"),
-               InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]
-        await update.message.reply_text("✅ Matn yangilandi!", reply_markup=InlineKeyboardMarkup(kb))
+        kb = [
+            [InlineKeyboardButton("📖 Qo'llanmani ko'rish", callback_data=f"agv_{gid}")],
+            [InlineKeyboardButton("🔧 Admin panel",           callback_data="adm_back")],
+        ]
+        await update.message.reply_text(
+            "✅ Muvaffaqiyatli! Qo'llanma matni yangilandi.",
+            reply_markup=InlineKeyboardMarkup(kb))
 
     elif step == "set_starttext":
         db.update_start_message(text=txt)
         context.user_data.clear()
-        kb = [[InlineKeyboardButton("⚙️ Sozlamalarga", callback_data="adm_settings")]]
-        await update.message.reply_text("✅ Start xabari yangilandi!", reply_markup=InlineKeyboardMarkup(kb))
+        kb = [
+            [InlineKeyboardButton("⚙️ Sozlamalar",  callback_data="adm_settings")],
+            [InlineKeyboardButton("🔧 Admin panel", callback_data="adm_back")],
+        ]
+        await update.message.reply_text(
+            "✅ Muvaffaqiyatli! Start xabari yangilandi.",
+            reply_markup=InlineKeyboardMarkup(kb))
 
     elif step in ("set_price","set_card","set_owner","set_channel"):
         key_map = {"set_price":"pro_price","set_card":"card_number","set_owner":"card_owner","set_channel":"channel"}
         db.set_setting(key_map[step], txt)
         context.user_data.clear()
-        kb = [[InlineKeyboardButton("⚙️ Sozlamalarga", callback_data="adm_settings")]]
-        await update.message.reply_text(f"✅ Yangilandi: {txt}", reply_markup=InlineKeyboardMarkup(kb))
+        kb = [
+            [InlineKeyboardButton("⚙️ Sozlamalar",  callback_data="adm_settings")],
+            [InlineKeyboardButton("🔧 Admin panel", callback_data="adm_back")],
+        ]
+        await update.message.reply_text(
+            f"✅ Muvaffaqiyatli!\nYangi qiymat: {txt}",
+            reply_markup=InlineKeyboardMarkup(kb))
 
     elif step == "broadcast":
         users = db.get_users_by_status(None)
@@ -1502,6 +1637,7 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_reply_prompt, pattern=r"^reply_\d+$"))
 
     # Testlar
+    app.add_handler(CallbackQueryHandler(pro_locked_test,    pattern=r"^pro_locked_\d+$"))
     app.add_handler(CallbackQueryHandler(show_pdf_test,      pattern=r"^pdf_test_\d+$"))
     app.add_handler(CallbackQueryHandler(submit_prompt,      pattern=r"^submit_\d+$"))
     app.add_handler(CallbackQueryHandler(show_guide,         pattern=r"^guide_\d+$"))
@@ -1530,7 +1666,7 @@ def main():
     # Admin foydalanuvchilar
     app.add_handler(CallbackQueryHandler(adm_users_list,  pattern=r"^aul_(all|approved|pro|pending)$"))
     app.add_handler(CallbackQueryHandler(adm_user_detail, pattern=r"^aud_\d+$"))
-    app.add_handler(CallbackQueryHandler(adm_user_action, pattern=r"^aua_(ok|prem|unprem|kick|reset)_\d+$"))
+    app.add_handler(CallbackQueryHandler(adm_user_action, pattern=r"^aua_(ok|prem|unprem|kick|reset|wipe)_\d+$"))
 
     # Qolgan callbacklar
     app.add_handler(CallbackQueryHandler(cb_handler))
