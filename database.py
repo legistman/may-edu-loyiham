@@ -151,6 +151,15 @@ Siz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imk
             (user_id,))
         self.conn.commit()
 
+    def wipe_user(self, user_id):
+        """Foydalanuvchining BARCHA ma'lumotlarini o'chirish"""
+        self.conn.execute("DELETE FROM pdf_results WHERE user_id=?", (user_id,))
+        self.conn.execute("DELETE FROM payment_requests WHERE user_id=?", (user_id,))
+        self.conn.execute(
+            "UPDATE users SET full_name='',status='new',pro_until=NULL WHERE user_id=?",
+            (user_id,))
+        self.conn.commit()
+
     def get_all_users(self):
         return [dict(r) for r in self.conn.execute(
             "SELECT * FROM users ORDER BY joined_at DESC").fetchall()]
