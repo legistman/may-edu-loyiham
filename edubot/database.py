@@ -203,6 +203,11 @@ Siz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imk
         return [dict(r) for r in self.conn.execute(
             "SELECT * FROM pdf_tests ORDER BY created_at DESC").fetchall()]
 
+    def get_all_pdf_tests_asc(self):
+        """Ketma-ketlik uchun — eng eski birinchi"""
+        return [dict(r) for r in self.conn.execute(
+            "SELECT * FROM pdf_tests ORDER BY created_at ASC").fetchall()]
+
     def get_free_pdf_tests(self):
         return [dict(r) for r in self.conn.execute(
             "SELECT * FROM pdf_tests WHERE is_free=1 ORDER BY created_at DESC").fetchall()]
