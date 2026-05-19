@@ -356,8 +356,8 @@ async def show_pdf_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [back("free_menu")],
             ])); return
 
-    # Ketma-ketlik tekshiruvi — birinchi ishlanmagan testni topamiz
-    all_tests_list = db.get_all_pdf_tests()
+    # Ketma-ketlik tekshiruvi — birinchi ishlanmagan testni topamiz (ASC tartibda)
+    all_tests_list = db.get_all_pdf_tests_asc()
     first_undone = None
     for t_check in all_tests_list:
         if t_check["id"] == test_id:
