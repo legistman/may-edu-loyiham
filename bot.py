@@ -356,16 +356,24 @@ async def show_pdf_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [back("free_menu")],
             ])); return
 
-    # Ketma-ketlik tekshiruvi: oldingi testni yechmagan bo'lsa kiritmaymiz
-    prev_id = db.get_prev_test_id(test_id)
-    if prev_id and not db.user_completed_test(uid, prev_id):
-        prev_test = db.get_pdf_test(prev_id)
+    # Ketma-ketlik tekshiruvi — birinchi ishlanmagan testni topamiz
+    all_tests_list = db.get_all_pdf_tests()
+    first_undone = None
+    for t_check in all_tests_list:
+        if t_check["id"] == test_id:
+            break
+        if not db.user_completed_test(uid, t_check["id"]):
+            first_undone = t_check
+            break
+    if first_undone:
+        fu_title = first_undone["title"]
+        fu_id    = first_undone["id"]
         await q.edit_message_text(
             f"⚠️ Ketma-ketlik buzildi!\n\n"
             f"Bu testni ishlash uchun avval:\n"
-            f"📝 '{prev_test['title']}' testini yeching.",
+            f"📝 {fu_title!r} testini yeching.",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(f"📝 {prev_test['title']}", callback_data=f"pdf_test_{prev_id}")],
+                [InlineKeyboardButton(f"📝 {fu_title}", callback_data=f"pdf_test_{fu_id}")],
                 [back("free_menu" if not prem else "pro_menu")],
             ])); return
 
@@ -574,7 +582,7 @@ async def handle_test_answers(update: Update, context: ContextTypes.DEFAULT_TYPE
         # PRO — to'liq tahlil
         xato = [f"  {i+1}-savol: Siz ❌{u}  →  To'g'ri ✅{k}"
                 for i, (u, k) in enumerate(zip(clean, key)) if u != k]
-        togri = "\n".join(f"  {i+1}–{k}" for i, k in enumerate(key))
+        togri = ", ".join(f"{i+1}-{k}" for i, k in enumerate(key))
         if xato:
             result += f"\n{'━'*24}\n❌ Xato savollar ({wrong} ta):\n" + "\n".join(xato[:30])
         result += f"\n\n{'━'*24}\n✅ To'g'ri javoblar kaliti:\n{togri}"
@@ -602,22 +610,18 @@ async def handle_test_answers(update: Update, context: ContextTypes.DEFAULT_TYPE
             msg = (f"💪 {fn}, boshlash qiyin — davom etish oson!\n\n"
                    f"👑 PRO bilan xatolaringizdan o'rganing:\n🔍 Batafsil tahlil\n📚 Maxsus qo'llanmalar\n\n"
                    f"💰 {price} so'm / 30 kun")
-        # Bepul foydalanuvchiga KUCHLI marketing xabari
-        xato_savollar = [i+1 for i,(u,k) in enumerate(zip(clean,key)) if u!=k]
-        xato_str = ", ".join(str(x) for x in xato_savollar[:5])
-        if len(xato_savollar) > 5:
-            xato_str += f" va yana {len(xato_savollar)-5} ta..."
+        # Bepul foydalanuvchiga marketing — faqat xato SONI
         marketing = (
-            f"🔍 Siz {wrong} ta savolda xato qildingiz\n"
-            f"({xato_str})\n\n"
-            f"Lekin qaysi javob to'g'ri ekanini\n"
-            f"bilmoqchimisiz? 🤔\n\n"
+            f"📊 Natija tahlili:\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👑 PRO obuna bilan HOZIROQ biling:\n\n"
+            f"❌ Xato javoblar soni: {wrong} ta\n\n"
+            f"Qaysi savollarda xato qilganingizni\n"
+            f"va to'g'ri javoblarni bilmoqchimisiz?\n\n"
+            f"👑 PRO obuna bilan:\n"
             f"✅ Har bir xato savol ko'rsatiladi\n"
-            f"✅ To'g'ri javoblar kaliti taqdim etiladi\n"
-            f"✅ Keyingi testlarda shu xatoni qaytarmaysiz\n"
-            f"✅ Barcha testlar + qo'llanmalar ochiladi\n\n"
+            f"✅ To'g'ri javoblar kaliti beriladi\n"
+            f"✅ Batafsil tahlil taqdim etiladi\n"
+            f"✅ Barcha testlar + qo'llanmalar\n\n"
             f"💰 {S('pro_price','349 000')} so'm / 30 kun\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"⚖️ Bilim — kelajagingizga investitsiya!"
@@ -692,8 +696,17 @@ async def my_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q    = update.callback_query; await q.answer()
     uid  = q.from_user.id
     prem = is_pro(uid) or is_approved(uid)
-    tests = db.get_all_pdf_tests() if prem else db.get_free_pdf_tests()
-    kb = [[InlineKeyboardButton(f"📝 {t['title']}", callback_data=f"my_result_{t['id']}")] for t in tests]
+    tests = db.get_all_pdf_tests()  # Barcha testlar ko'rinadi
+    kb = []
+    for t in tests:
+        if t.get("is_free") or prem:
+            kb.append([InlineKeyboardButton(
+                f"{'🆓' if t.get('is_free') else '👑'} {t['title']}",
+                callback_data=f"my_result_{t['id']}")])
+        else:
+            kb.append([InlineKeyboardButton(
+                f"🔒 {t['title']}",
+                callback_data=f"stat_locked_{t['id']}")])
     kb.append([back("user_stats")])
     await q.edit_message_text(
         "👤 Shaxsiy natijalar\nQaysi test natijasini ko'rmoqchisiz?",
@@ -732,6 +745,21 @@ async def my_result_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for i, r in enumerate(results[:5]):
             text += f"  {i+1}. {round(r['correct']*3.1,1)} ball ({round(r['correct']/t['question_count']*100)}%) — {str(r.get('taken_at',''))[:10]}\n"
     await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+
+async def stat_locked(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Bepul foydalanuvchi PRO statistikasiga kirishga uringanda"""
+    q = update.callback_query; await q.answer()
+    await q.edit_message_text(
+        "🔒 Bu statistika faqat PRO obuna uchun\n\n"
+        "👑 PRO obuna bilan:\n"
+        "✅ Barcha testlar bo'yicha shaxsiy statistika\n"
+        "✅ Xato tahlili va to'g'ri javoblar\n"
+        "✅ Ommaviy reyting\n\n"
+        f"💰 {S('pro_price','349 000')} so'm / 30 kun",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("👑 PRO olish", callback_data="buy_pro")],
+            [back("my_results")],
+        ]))
 
 async def public_rating(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q    = update.callback_query; await q.answer()
@@ -1550,22 +1578,39 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("📝 Yangi matnni yozing:\nBekor: /admin")
 
     # Guide type
-    elif data == "guide_type_free":
-        db.add_guide(context.user_data.get("guide_title",""),
-                     context.user_data.get("guide_content",""), 1,
-                     context.user_data.get("guide_file_id",""))
+    elif data in ("guide_type_free", "guide_type_pro"):
+        is_free   = 1 if data == "guide_type_free" else 0
+        g_title   = context.user_data.get("guide_title","")
+        g_content = context.user_data.get("guide_content","")
+        g_file_id = context.user_data.get("guide_file_id","")
+        db.add_guide(g_title, g_content, is_free, g_file_id)
         context.user_data.clear()
         kb = [[InlineKeyboardButton("📚 Qo'llanmalarga", callback_data="adm_guides"),
                InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]
-        await q.edit_message_text("✅ Qo'llanma qo'shildi! (Bepul)", reply_markup=InlineKeyboardMarkup(kb))
-    elif data == "guide_type_pro":
-        db.add_guide(context.user_data.get("guide_title",""),
-                     context.user_data.get("guide_content",""), 0,
-                     context.user_data.get("guide_file_id",""))
-        context.user_data.clear()
-        kb = [[InlineKeyboardButton("📚 Qo'llanmalarga", callback_data="adm_guides"),
-               InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]
-        await q.edit_message_text("✅ Qo'llanma qo'shildi! (PRO)", reply_markup=InlineKeyboardMarkup(kb))
+        label = "Bepul" if is_free else "PRO"
+        await q.edit_message_text(
+            f"✅ Muvaffaqiyatli! Qo'llanma qo'shildi ({label})",
+            reply_markup=InlineKeyboardMarkup(kb))
+        # Barcha foydalanuvchilarga bildirishnoma
+        all_users = db.get_all_users()
+        sent = 0
+        for u in all_users:
+            if u.get("full_name"):
+                try:
+                    await context.bot.send_message(
+                        u["user_id"],
+                        f"📚 Yangi qo'llanma qo'shildi!\n\n"
+                        f"📖 {g_title}\n"
+                        f"{'🆓 Bepul' if is_free else '👑 PRO obuna'}\n\n"
+                        f"Hoziroq o'qing! 👇",
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton(
+                                "📚 Qo'llanmalarga o'tish",
+                                callback_data="free_guides" if is_free else "pro_guides")]
+                        ]))
+                    sent += 1
+                except: pass
+        await context.bot.send_message(ADMIN_ID, f"📢 {sent} ta foydalanuvchiga xabar yuborildi.")
 
     # PDF test type
     elif data == "pdf_type_free":
@@ -1645,6 +1690,7 @@ def main():
     # Statistika
     app.add_handler(CallbackQueryHandler(user_stats,         pattern=r"^user_stats$"))
     app.add_handler(CallbackQueryHandler(my_results,         pattern=r"^my_results$"))
+    app.add_handler(CallbackQueryHandler(stat_locked,         pattern=r"^stat_locked_\d+$"))
     app.add_handler(CallbackQueryHandler(my_result_detail,   pattern=r"^my_result_\d+$"))
     app.add_handler(CallbackQueryHandler(public_rating,      pattern=r"^public_rating$"))
     app.add_handler(CallbackQueryHandler(pub_rating_detail,  pattern=r"^pub_rating_\d+$"))
