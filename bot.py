@@ -362,7 +362,6 @@ async def sahovat_payment_action(update: Update, context: ContextTypes.DEFAULT_T
     pay_id = int(parts[2])
     uid    = int(parts[3])
     cap    = q.message.caption or q.message.text or ""
-    guide_id = S("sahovat_guide_id","")
     u    = db.get_user(uid)
     name = uname(u) if u else str(uid)
 
@@ -403,22 +402,6 @@ async def sahovat_payment_action(update: Update, context: ContextTypes.DEFAULT_T
         try:
             await context.bot.send_message(uid, motivatsion)
         except: pass
-
-        # Sahovat qo'llanmasini yuborish
-        if guide_id:
-            try:
-                gid = int(guide_id)
-                g   = db.get_guide(gid)
-                if g and g.get("file_id"):
-                    await context.bot.send_document(
-                        uid, g["file_id"],
-                        caption=f"🎁 Sahovat qilganlar uchun maxsus qo'llanma\n\n📖 {g['title']}",
-                        protect_content=True)
-                elif g and g.get("content"):
-                    await context.bot.send_message(
-                        uid,
-                        f"📖 {g['title']}\n\n{g['content'][:3000]}")
-            except: pass
     else:
         db.reject_sahovat_payment(pay_id)
         try:
@@ -1361,7 +1344,7 @@ async def adm_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sm    = db.get_start_message()
     photo = "✅ Bor" if sm and sm.get("photo_id") else "❌ Yo'q"
     sah_card = S("sahovat_card","—"); sah_owner = S("sahovat_owner","—")
-    sah_pct  = S("sahovat_percent","10"); sah_gid = S("sahovat_guide_id","—")
+    sah_pct  = S("sahovat_percent","10")
     await q.edit_message_text(
         f"⚙️ Sozlamalar\n{'━'*22}\n"
         f"💰 PRO narx: {price} so'm\n💳 Karta: {card}\n"
@@ -1369,8 +1352,7 @@ async def adm_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{'━'*22}\n"
         f"🤲 Sahovat karta: {sah_card}\n"
         f"👤 Sahovat egasi: {sah_owner}\n"
-        f"💡 Xayriya foizi: {sah_pct}%\n"
-        f"📖 Sahovat qo'llanma ID: {sah_gid}",
+        f"💡 Xayriya foizi: {sah_pct}%",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("💰 Narxni o'zgartirish",    callback_data="set_price")],
             [InlineKeyboardButton("💳 Karta raqami",           callback_data="set_card")],
@@ -1383,7 +1365,6 @@ async def adm_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("💳 Sahovat kartasi",        callback_data="set_sah_card")],
             [InlineKeyboardButton("👤 Sahovat karta egasi",    callback_data="set_sah_owner")],
             [InlineKeyboardButton("💡 Xayriya foizi (%)",      callback_data="set_sah_percent")],
-            [InlineKeyboardButton("📖 Sahovat qo'llanma ID",   callback_data="set_sah_guide")],
             [back("adm_back")],
         ]))
 
@@ -1821,12 +1802,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ Muvaffaqiyatli!\nYangi qiymat: {txt}",
             reply_markup=InlineKeyboardMarkup(kb))
 
-    elif step in ("set_sah_card","set_sah_owner","set_sah_percent","set_sah_guide"):
+    elif step in ("set_sah_card","set_sah_owner","set_sah_percent"):
         key_map = {
             "set_sah_card":    "sahovat_card",
             "set_sah_owner":   "sahovat_owner",
             "set_sah_percent": "sahovat_percent",
-            "set_sah_guide":   "sahovat_guide_id",
         }
         db.set_setting(key_map[step], txt)
         context.user_data.clear()
@@ -1973,7 +1953,7 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer("✅ Rasm o'chirildi!", show_alert=True)
         await adm_settings(update, context)
     elif data in ("set_price","set_card","set_owner","set_channel","set_starttext","set_startphoto",
-                  "set_sah_card","set_sah_owner","set_sah_percent","set_sah_guide"):
+                  "set_sah_card","set_sah_owner","set_sah_percent"):
         hints = {
             "set_price":      "💰 Yangi narxni yozing (masalan: 349 000):",
             "set_card":       "💳 Yangi karta raqamini yozing:",
@@ -1984,7 +1964,6 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "set_sah_card":   "💳 Sahovat kartasi raqamini yozing:",
             "set_sah_owner":  "👤 Sahovat karta egasi ismini yozing:",
             "set_sah_percent":"💡 Mehribonlik uyiga beriladigan foizni yozing (masalan: 10):",
-            "set_sah_guide":  "📖 Sahovat uchun qo'llanma ID sini yozing (bo'sh qoldirsa o'chiriladi):",
         }
         context.user_data["step"] = data
         await q.edit_message_text(hints[data] + "\n\nBekor: /admin")
