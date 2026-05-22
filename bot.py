@@ -118,6 +118,7 @@ async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if badge_str: header += f"\n{badge_str}"
         kb = [
             [InlineKeyboardButton("👑 PRO bo'lim",       callback_data="pro_menu")],
+            [InlineKeyboardButton("🤲 Sahovat qilish",   callback_data="sahovat_info")],
             [InlineKeyboardButton("📩 Adminga murojaat", callback_data="contact_admin")],
         ]
     else:
@@ -127,6 +128,7 @@ async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("ℹ️ Bot haqida",       callback_data="about_bot")],
             [InlineKeyboardButton("🆓 Bepul versiya",     callback_data="free_menu")],
             [InlineKeyboardButton("👑 PRO versiya",       callback_data="pro_info")],
+            [InlineKeyboardButton("🤲 Sahovat qilish",    callback_data="sahovat_info")],
             [InlineKeyboardButton("📩 Adminga murojaat", callback_data="contact_admin")],
         ]
 
@@ -312,6 +314,100 @@ async def buy_pro(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("📸 Chek yuboraman", callback_data="send_proof")],
             [back("back_welcome")],
         ]))
+
+# ═══════════════════════════════════════════════════════
+#  SAHOVAT
+# ═══════════════════════════════════════════════════════
+async def sahovat_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    card    = S("sahovat_card", S("card_number","9860 3501 4876 2387"))
+    owner   = S("sahovat_owner", S("card_owner","Mallayev Ozodbek"))
+    pct     = S("sahovat_percent","10")
+    stats   = db.get_sahovat_stats()
+    cnt     = stats["confirmed_count"]
+    await q.edit_message_text(
+        f"🤲 Sahovat — Mehribonlik uyiga yordam\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"❤️ Har bir to'lovning {pct}% mehribonlik uyiga yo'naltiriladi.\n\n"
+        f"Istalgan miqdorda pul o'tkazishingiz mumkin —\n"
+        f"u kichik bo'lsa ham, katta yurak!\n\n"
+        f"💳 Karta:\n`{card}`\n"
+        f"👤 Egasi: {owner}\n\n"
+        f"📋 Qadamlar:\n"
+        f"1️⃣ Kartaga istalgan miqdor o'tkiring\n"
+        f"2️⃣ To'lov chekini (screenshot) saqlang\n"
+        f"3️⃣ Quyidagi tugmani bosib chekni yuboring\n\n"
+        f"🕊 Jami tasdiqlangan sahovat: {cnt} ta\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Yaxshilik qiling — dunyoni yoritaylik! ✨",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📸 Chek yuboraman", callback_data="sahovat_proof")],
+            [back("back_welcome")],
+        ]))
+
+async def sahovat_proof(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    context.user_data["step"] = "waiting_sahovat_proof"
+    await q.edit_message_text(
+        "📸 Sahovat to'lovi chekini yuboring (rasm yoki fayl).\n\n"
+        "Miqdorni ham yozing agar xohlasangiz.\n\nBekor: /start")
+
+async def sahovat_payment_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin sahovat to'lovini tasdiqlaydi yoki rad etadi"""
+    q = update.callback_query; await q.answer()
+    if not is_admin(q.from_user.id): return
+    parts  = q.data.split("_")   # sah_ok_PAYID_UID  yoki sah_no_PAYID_UID
+    action = parts[1]
+    pay_id = int(parts[2])
+    uid    = int(parts[3])
+    pct    = S("sahovat_percent","10")
+    cap    = q.message.caption or q.message.text or ""
+    guide_id = S("sahovat_guide_id","")
+
+    if action == "ok":
+        db.confirm_sahovat_payment(pay_id)
+        try:
+            await q.edit_message_caption(cap + f"\n\n✅ Sahovat tasdiqlandi! Rahmat ❤️")
+        except:
+            await q.edit_message_text(cap + f"\n\n✅ Sahovat tasdiqlandi!")
+        # Foydalanuvchiga xabar + qo'llanma
+        msg = (
+            f"🤲 Sahovat to'lovingiz tasdiqlandi!\n\n"
+            f"❤️ To'lovingizning {pct}% mehribonlik uyiga yo'naltirildi.\n\n"
+            f"Yaxshilik qilganingiz uchun katta rahmat!\n"
+            f"Dunyoni yaxshilar yoritadi! ✨"
+        )
+        try:
+            await context.bot.send_message(uid, msg)
+        except: pass
+        # Sahovat qo'llanmasini yuborish
+        if guide_id:
+            try:
+                gid = int(guide_id)
+                g   = db.get_guide(gid)
+                if g and g.get("file_id"):
+                    await context.bot.send_document(
+                        uid, g["file_id"],
+                        caption=f"📖 {g['title']}\n\nSahovat qilganlar uchun maxsus qo'llanma 🎁",
+                        protect_content=True)
+                elif g and g.get("content"):
+                    await context.bot.send_message(
+                        uid,
+                        f"📖 {g['title']}\n\n{g['content'][:3000]}")
+            except: pass
+    else:
+        db.reject_sahovat_payment(pay_id)
+        try:
+            await q.edit_message_caption(cap + "\n\n❌ Rad etildi.")
+        except:
+            await q.edit_message_text(cap + "\n\n❌ Rad etildi.")
+        try:
+            await context.bot.send_message(
+                uid,
+                "😔 Sahovat to'lovingiz tasdiqlanmadi.\n"
+                "Iltimos adminga murojaat qiling.")
+        except: pass
 
 async def send_proof(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
@@ -837,6 +933,7 @@ async def show_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📚 Qo'llanmalar",       callback_data="adm_guides")],
         [InlineKeyboardButton("👥 Foydalanuvchilar",   callback_data="adm_users")],
         [InlineKeyboardButton("💎 To'lov so'rovlari",  callback_data="adm_payments")],
+        [InlineKeyboardButton("🤲 Sahovat to'lovlari", callback_data="adm_sahovat")],
         [InlineKeyboardButton("📊 Statistika",         callback_data="adm_stats")],
         [InlineKeyboardButton("⚙️ Sozlamalar",         callback_data="adm_settings")],
         [InlineKeyboardButton("📢 Xabar yuborish",     callback_data="adm_broadcast")],
@@ -1108,6 +1205,28 @@ async def adm_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💎 Kutayotgan to'lovlar: {len(pays)} ta" if pays else "✅ Kutayotgan to'lovlar yo'q.",
         reply_markup=InlineKeyboardMarkup(kb))
 
+async def adm_sahovat_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q    = update.callback_query; await q.answer()
+    pays = db.get_pending_sahovat_payments()
+    stats = db.get_sahovat_stats()
+    kb = []
+    for p in pays:
+        name = p.get("full_name") or p.get("first_name") or str(p["user_id"])
+        kb.append([InlineKeyboardButton(
+            f"🤲 {name}",
+            callback_data=f"aud_{p['user_id']}")])
+    kb.append([back("adm_back")])
+    text = (
+        f"🤲 Sahovat to'lovlari\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⏳ Kutayotgan: {len(pays)} ta\n"
+        f"✅ Jami tasdiqlangan: {stats['confirmed_count']} ta"
+    )
+    await q.edit_message_text(
+        text if pays else "✅ Kutayotgan sahovat to'lovlari yo'q.\n"
+                          f"Jami tasdiqlangan: {stats['confirmed_count']} ta",
+        reply_markup=InlineKeyboardMarkup(kb))
+
 # ── STATISTIKA (ADMIN) ───────────────────────────────
 async def adm_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q  = update.callback_query; await q.answer()
@@ -1169,10 +1288,17 @@ async def adm_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ch    = S("channel","@legistman")
     sm    = db.get_start_message()
     photo = "✅ Bor" if sm and sm.get("photo_id") else "❌ Yo'q"
+    sah_card = S("sahovat_card","—"); sah_owner = S("sahovat_owner","—")
+    sah_pct  = S("sahovat_percent","10"); sah_gid = S("sahovat_guide_id","—")
     await q.edit_message_text(
         f"⚙️ Sozlamalar\n{'━'*22}\n"
         f"💰 PRO narx: {price} so'm\n💳 Karta: {card}\n"
-        f"👤 Egasi: {owner}\n📢 Kanal: {ch}\n🖼 Start rasmi: {photo}",
+        f"👤 Egasi: {owner}\n📢 Kanal: {ch}\n🖼 Start rasmi: {photo}\n"
+        f"{'━'*22}\n"
+        f"🤲 Sahovat karta: {sah_card}\n"
+        f"👤 Sahovat egasi: {sah_owner}\n"
+        f"💡 Xayriya foizi: {sah_pct}%\n"
+        f"📖 Sahovat qo'llanma ID: {sah_gid}",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("💰 Narxni o'zgartirish",    callback_data="set_price")],
             [InlineKeyboardButton("💳 Karta raqami",           callback_data="set_card")],
@@ -1181,6 +1307,11 @@ async def adm_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("📝 Start xabarini tahrirlash", callback_data="set_starttext")],
             [InlineKeyboardButton("🖼 Start rasmi yuklash",    callback_data="set_startphoto")],
             [InlineKeyboardButton("🗑 Start rasmini o'chirish", callback_data="set_startphoto_del")],
+            [InlineKeyboardButton("━━━ SAHOVAT ━━━",           callback_data="adm_settings")],
+            [InlineKeyboardButton("💳 Sahovat kartasi",        callback_data="set_sah_card")],
+            [InlineKeyboardButton("👤 Sahovat karta egasi",    callback_data="set_sah_owner")],
+            [InlineKeyboardButton("💡 Xayriya foizi (%)",      callback_data="set_sah_percent")],
+            [InlineKeyboardButton("📖 Sahovat qo'llanma ID",   callback_data="set_sah_guide")],
             [back("adm_back")],
         ]))
 
@@ -1213,6 +1344,30 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=f"💎 Yangi to'lov!\n\n👤 {name}\n🆔 {uid}\n📛 @{user.username or 'yoq'}",
             reply_markup=InlineKeyboardMarkup(kb))
         db.add_payment_request(uid)
+        return
+
+    # Sahovat cheki
+    if step == "waiting_sahovat_proof":
+        user = update.effective_user
+        u    = db.get_user(uid)
+        name = uname(u) if u else user.first_name
+        pct  = S("sahovat_percent","10")
+        db.add_sahovat_payment(uid)
+        pay_id = db.conn.execute(
+            "SELECT id FROM sahovat_payments WHERE user_id=? ORDER BY id DESC LIMIT 1",
+            (uid,)).fetchone()["id"]
+        context.user_data.clear()
+        await update.message.reply_text(
+            "🤲 Sahovat cheki qabul qilindi!\n\n"
+            "Admin ko'rib chiqadi va siz qo'llanmani olasiz. ❤️")
+        kb = [[InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"sah_ok_{pay_id}_{uid}"),
+               InlineKeyboardButton("❌ Rad etish",  callback_data=f"sah_no_{pay_id}_{uid}")]]
+        await context.bot.send_photo(
+            ADMIN_ID, photo[-1].file_id,
+            caption=f"🤲 Yangi sahovat to'lovi!\n\n"
+                    f"👤 {name}\n🆔 {uid}\n📛 @{user.username or 'yoq'}\n"
+                    f"💡 {pct}% mehribonlik uyiga yo'naltiriladi",
+            reply_markup=InlineKeyboardMarkup(kb))
         return
 
     # Start rasmi (admin)
@@ -1312,6 +1467,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=f"💎 Yangi to'lov (fayl)!\n\n👤 {name}\n🆔 {uid}\n📛 @{user.username or 'yoq'}",
                 reply_markup=InlineKeyboardMarkup(kb))
             db.add_payment_request(uid)
+        else:
+            await update.message.reply_text("Iltimos rasm yoki fayl yuboring.")
+        return
+
+    # Sahovat cheki (fayl)
+    if step == "waiting_sahovat_proof":
+        doc = update.message.document
+        if doc:
+            user = update.effective_user
+            u    = db.get_user(uid)
+            name = uname(u) if u else user.first_name
+            pct  = S("sahovat_percent","10")
+            db.add_sahovat_payment(uid)
+            pay_id = db.conn.execute(
+                "SELECT id FROM sahovat_payments WHERE user_id=? ORDER BY id DESC LIMIT 1",
+                (uid,)).fetchone()["id"]
+            context.user_data.clear()
+            await update.message.reply_text(
+                "🤲 Sahovat cheki qabul qilindi!\n\n"
+                "Admin ko'rib chiqadi va siz qo'llanmani olasiz. ❤️")
+            kb = [[InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"sah_ok_{pay_id}_{uid}"),
+                   InlineKeyboardButton("❌ Rad etish",  callback_data=f"sah_no_{pay_id}_{uid}")]]
+            await context.bot.send_document(
+                ADMIN_ID, doc.file_id,
+                caption=f"🤲 Yangi sahovat (fayl)!\n\n"
+                        f"👤 {name}\n🆔 {uid}\n📛 @{user.username or 'yoq'}\n"
+                        f"💡 {pct}% mehribonlik uyiga yo'naltiriladi",
+                reply_markup=InlineKeyboardMarkup(kb))
         else:
             await update.message.reply_text("Iltimos rasm yoki fayl yuboring.")
         return
@@ -1511,6 +1694,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ Muvaffaqiyatli!\nYangi qiymat: {txt}",
             reply_markup=InlineKeyboardMarkup(kb))
 
+    elif step in ("set_sah_card","set_sah_owner","set_sah_percent","set_sah_guide"):
+        key_map = {
+            "set_sah_card":    "sahovat_card",
+            "set_sah_owner":   "sahovat_owner",
+            "set_sah_percent": "sahovat_percent",
+            "set_sah_guide":   "sahovat_guide_id",
+        }
+        db.set_setting(key_map[step], txt)
+        context.user_data.clear()
+        kb = [
+            [InlineKeyboardButton("⚙️ Sozlamalar",  callback_data="adm_settings")],
+            [InlineKeyboardButton("🔧 Admin panel", callback_data="adm_back")],
+        ]
+        await update.message.reply_text(
+            f"✅ Sahovat sozlamasi yangilandi!\nYangi qiymat: {txt}",
+            reply_markup=InlineKeyboardMarkup(kb))
+
     elif step == "broadcast":
         users = db.get_users_by_status(None)
         sent  = 0
@@ -1541,6 +1741,7 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "adm_last_users":   await adm_last_users(update, context)
     elif data == "adm_rating_all":   await adm_rating_all(update, context)
     elif data == "adm_rating_test":  await adm_rating_test_list(update, context)
+    elif data == "adm_sahovat":      await adm_sahovat_payments(update, context)
     elif data == "adm_add_test":
         context.user_data["step"] = "pdf_title"
         await q.edit_message_text("📝 Yangi test nomi:\nBekor: /admin")
@@ -1625,14 +1826,19 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         db.update_start_message(photo_id="")
         await q.answer("✅ Rasm o'chirildi!", show_alert=True)
         await adm_settings(update, context)
-    elif data in ("set_price","set_card","set_owner","set_channel","set_starttext","set_startphoto"):
+    elif data in ("set_price","set_card","set_owner","set_channel","set_starttext","set_startphoto",
+                  "set_sah_card","set_sah_owner","set_sah_percent","set_sah_guide"):
         hints = {
-            "set_price":     "💰 Yangi narxni yozing (masalan: 349 000):",
-            "set_card":      "💳 Yangi karta raqamini yozing:",
-            "set_owner":     "👤 Yangi karta egasi ismini yozing:",
-            "set_channel":   "📢 Yangi kanal username yozing (masalan: @legistman):",
-            "set_starttext": "📝 Yangi start xabari matnini yozing:",
-            "set_startphoto":"🖼 Start uchun rasm yuboring:",
+            "set_price":      "💰 Yangi narxni yozing (masalan: 349 000):",
+            "set_card":       "💳 Yangi karta raqamini yozing:",
+            "set_owner":      "👤 Yangi karta egasi ismini yozing:",
+            "set_channel":    "📢 Yangi kanal username yozing (masalan: @legistman):",
+            "set_starttext":  "📝 Yangi start xabari matnini yozing:",
+            "set_startphoto": "🖼 Start uchun rasm yuboring:",
+            "set_sah_card":   "💳 Sahovat kartasi raqamini yozing:",
+            "set_sah_owner":  "👤 Sahovat karta egasi ismini yozing:",
+            "set_sah_percent":"💡 Mehribonlik uyiga beriladigan foizni yozing (masalan: 10):",
+            "set_sah_guide":  "📖 Sahovat uchun qo'llanma ID sini yozing (bo'sh qoldirsa o'chiriladi):",
         }
         context.user_data["step"] = data
         await q.edit_message_text(hints[data] + "\n\nBekor: /admin")
@@ -1678,6 +1884,9 @@ def main():
     app.add_handler(CallbackQueryHandler(buy_pro,         pattern=r"^buy_pro$"))
     app.add_handler(CallbackQueryHandler(send_proof,      pattern=r"^send_proof$"))
     app.add_handler(CallbackQueryHandler(payment_action,  pattern=r"^pay_(ok|no)_\d+$"))
+    app.add_handler(CallbackQueryHandler(sahovat_info,    pattern=r"^sahovat_info$"))
+    app.add_handler(CallbackQueryHandler(sahovat_proof,   pattern=r"^sahovat_proof$"))
+    app.add_handler(CallbackQueryHandler(sahovat_payment_action, pattern=r"^sah_(ok|no)_\d+_\d+$"))
     app.add_handler(CallbackQueryHandler(contact_admin,   pattern=r"^contact_admin$"))
     app.add_handler(CallbackQueryHandler(admin_reply_prompt, pattern=r"^reply_\d+$"))
 
