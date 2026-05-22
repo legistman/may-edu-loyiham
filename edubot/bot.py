@@ -1366,12 +1366,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ADMIN_ID, photo[-1].file_id,
             caption=f"🤲 Yangi sahovat to'lovi!\n\n"
                     f"👤 {name}\n🆔 {uid}\n📛 @{user.username or 'yoq'}\n"
-                    f"💡 {pct}% mehribonlik uyiga yo'naltiriladi",
+                    f"💡 50% mehribonlik uyiga yo'naltiriladi",
             reply_markup=InlineKeyboardMarkup(kb))
         return
 
     # Start rasmi (admin)
-    if is_admin(uid) and step in ("set_startphoto",):
         db.update_start_message(photo_id=photo[-1].file_id)
         context.user_data.clear()
         await update.message.reply_text(
@@ -1431,15 +1430,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "To'liq ism va familiyangizni kiriting.\nMasalan: Mallayev Ozodbek"); return
         db.add_user(uid, update.effective_user.username or "", update.effective_user.first_name, txt)
-        # Referral tizimi olib tashlandi
+        is_re = context.user_data.get("re_register", False)
         context.user_data.clear()
         # Adminga bildirishnoma
         try:
             tg_name = update.effective_user.first_name or ""
             tg_user = update.effective_user.username or "yoq"
+            prefix  = "♻️ Qayta ro'yxat!" if is_re else "🆕 Yangi a'zo!"
             await context.bot.send_message(
                 ADMIN_ID,
-                "🆕 Yangi a'zo!\n" + "━"*20 + "\n"
+                prefix + "\n" + "━"*20 + "\n"
                 f"👤 Kiritilgan ism: {txt}\n"
                 f"📱 Telegram ismi: {tg_name}\n"
                 f"🆔 ID: {uid}\n"
@@ -1449,7 +1449,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                          callback_data=f"reply_{uid}")]
                 ]))
         except: pass
-        await show_welcome(update, context)
+        if is_re:
+            await update.message.reply_text(
+                f"✅ Rahmat, {txt}!\n\nIsmingiz yangilandi. Endi botdan to'liq foydalanishingiz mumkin! 🎉",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🏠 Bosh menyu", callback_data="back_welcome")]
+                ]))
+        else:
+            await show_welcome(update, context)
         return
     # To'lov cheki (fayl)
     if step == "waiting_proof":
@@ -1493,7 +1500,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ADMIN_ID, doc.file_id,
                 caption=f"🤲 Yangi sahovat (fayl)!\n\n"
                         f"👤 {name}\n🆔 {uid}\n📛 @{user.username or 'yoq'}\n"
-                        f"💡 {pct}% mehribonlik uyiga yo'naltiriladi",
+                        f"💡 50% mehribonlik uyiga yo'naltiriladi",
                 reply_markup=InlineKeyboardMarkup(kb))
         else:
             await update.message.reply_text("Iltimos rasm yoki fayl yuboring.")
@@ -1716,7 +1723,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sent  = 0
         for u in users:
             if u["status"] in ("approved","pro"):
-                try: await context.bot.send_message(u["user_id"], f"📢\n\n{txt}"); sent += 1
+                try:
+                    await context.bot.send_message(
+                        u["user_id"],
+                        f"📢\n\n{txt}",
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton(
+                                "✍️ Asl ismim bilan qayta ro'yxatdan o'tish",
+                                callback_data="re_register")]
+                        ]))
+                    sent += 1
                 except: pass
         context.user_data.clear()
         kb = [[InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]
@@ -1731,6 +1747,14 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Admin menyu
     if data == "adm_back":           await show_admin_menu(update, context)
+    elif data == "re_register":
+        uid2 = q.from_user.id
+        context.user_data["step"] = "waiting_fullname"
+        context.user_data["re_register"] = True
+        await q.edit_message_text(
+            "✍️ Iltimos, asl ismingiz va familiyangizni to'liq kiriting:\n\n"
+            "📝 Masalan: Mallayev Ozodbek\n\n"
+            "Bu ma'lumot faqat bot ichida ishlatiladi.")
     elif data == "adm_tests":        await adm_tests(update, context)
     elif data == "adm_guides":       await adm_guides(update, context)
     elif data == "adm_users":        await adm_users(update, context)
