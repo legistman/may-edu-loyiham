@@ -1446,7 +1446,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"📛 @{tg_user}",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(f"💬 {txt} ga xabar yuborish",
-                                         callback_data=f"reply_{uid}")]
+                                         callback_data=f"reply_{uid}")],
+                    [InlineKeyboardButton("♻️ Qayta ro'yxatdan o'tkazish",
+                                         callback_data=f"adm_reregister_{uid}")],
                 ]))
         except: pass
         if is_re:
@@ -1755,6 +1757,21 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "✍️ Iltimos, asl ismingiz va familiyangizni to'liq kiriting:\n\n"
             "📝 Masalan: Mallayev Ozodbek\n\n"
             "Bu ma'lumot faqat bot ichida ishlatiladi.")
+    elif data.startswith("adm_reregister_"):
+        if not is_admin(q.from_user.id): return
+        tid = int(data.split("_")[2])
+        try:
+            await context.bot.send_message(
+                tid,
+                "📢 Admin so'rovi:\n\n"
+                "✍️ Iltimos, asl ismingiz va familiyangizni to'liq kiriting.\n\n"
+                "📝 Masalan: Mallayev Ozodbek",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("✍️ Ismimni yangilash", callback_data="re_register")]
+                ]))
+            await q.answer("✅ Foydalanuvchiga so'rov yuborildi!", show_alert=True)
+        except:
+            await q.answer("❌ Xabar yuborib bo'lmadi.", show_alert=True)
     elif data == "adm_tests":        await adm_tests(update, context)
     elif data == "adm_guides":       await adm_guides(update, context)
     elif data == "adm_users":        await adm_users(update, context)
@@ -1913,6 +1930,7 @@ def main():
     app.add_handler(CallbackQueryHandler(sahovat_payment_action, pattern=r"^sah_(ok|no)_\d+_\d+$"))
     app.add_handler(CallbackQueryHandler(contact_admin,   pattern=r"^contact_admin$"))
     app.add_handler(CallbackQueryHandler(admin_reply_prompt, pattern=r"^reply_\d+$"))
+    app.add_handler(CallbackQueryHandler(cb_handler,      pattern=r"^adm_reregister_\d+$"))
 
     # Testlar
     app.add_handler(CallbackQueryHandler(pro_locked_test,    pattern=r"^pro_locked_\d+$"))
