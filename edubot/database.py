@@ -63,14 +63,24 @@ class Database:
             id       INTEGER PRIMARY KEY,
             text     TEXT NOT NULL,
             photo_id TEXT DEFAULT '')""")
+        c.execute("""CREATE TABLE IF NOT EXISTS sahovat_payments (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER,
+            amount     TEXT DEFAULT '',
+            status     TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
 
         defaults = [
-            ('pro_price',       '349 000'),
-            ('pro_days',        '30'),
-            ('card_number',     '9860 3501 4876 2387'),
-            ('card_owner',      'Mallayev Ozodbek'),
-            ('ref_needed',      '10'),
-            ('channel',         '@legistman'),
+            ('pro_price',         '349 000'),
+            ('pro_days',          '30'),
+            ('card_number',       '9860 3501 4876 2387'),
+            ('card_owner',        'Mallayev Ozodbek'),
+            ('ref_needed',        '10'),
+            ('channel',           '@legistman'),
+            ('sahovat_card',      '9860 3501 4876 2387'),
+            ('sahovat_owner',     'Mallayev Ozodbek'),
+            ('sahovat_percent',   '10'),
+            ('sahovat_guide_id',  ''),
         ]
         for k, v in defaults:
             c.execute("INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)", (k, v))
@@ -363,6 +373,35 @@ Siz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imk
             FROM payment_requests p JOIN users u ON p.user_id=u.user_id
             WHERE p.status='pending' ORDER BY p.created_at DESC""").fetchall()
         return [dict(r) for r in rows]
+
+    # ── SAHOVAT TO'LOVLARI ───────────────────────────────────────────────────
+    def add_sahovat_payment(self, user_id, amount=""):
+        self.conn.execute(
+            "INSERT INTO sahovat_payments (user_id, amount) VALUES (?,?)",
+            (user_id, amount))
+        self.conn.commit()
+
+    def get_pending_sahovat_payments(self):
+        rows = self.conn.execute("""
+            SELECT s.*,u.first_name,u.full_name,u.username
+            FROM sahovat_payments s JOIN users u ON s.user_id=u.user_id
+            WHERE s.status='pending' ORDER BY s.created_at DESC""").fetchall()
+        return [dict(r) for r in rows]
+
+    def confirm_sahovat_payment(self, payment_id):
+        self.conn.execute(
+            "UPDATE sahovat_payments SET status='confirmed' WHERE id=?", (payment_id,))
+        self.conn.commit()
+
+    def reject_sahovat_payment(self, payment_id):
+        self.conn.execute(
+            "UPDATE sahovat_payments SET status='rejected' WHERE id=?", (payment_id,))
+        self.conn.commit()
+
+    def get_sahovat_stats(self):
+        r = self.conn.execute(
+            "SELECT COUNT(*) FROM sahovat_payments WHERE status='confirmed'").fetchone()
+        return {"confirmed_count": r[0] if r else 0}
 
     # ── REFERRAL ─────────────────────────────────────────────────────────────
     def add_referral(self, inviter_id, invited_id):
