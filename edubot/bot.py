@@ -1443,11 +1443,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Start rasmi (admin)
+    if step == "set_startphoto" and is_admin(uid):
         db.update_start_message(photo_id=photo[-1].file_id)
         context.user_data.clear()
         await update.message.reply_text(
             "✅ Start rasmi yangilandi!",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ Sozlamalarga", callback_data="adm_settings")]]))
+        return
 
 # ═══════════════════════════════════════════════════════
 #  PDF HANDLERI
