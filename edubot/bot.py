@@ -361,26 +361,49 @@ async def sahovat_payment_action(update: Update, context: ContextTypes.DEFAULT_T
     action = parts[1]
     pay_id = int(parts[2])
     uid    = int(parts[3])
-    pct    = S("sahovat_percent","10")
     cap    = q.message.caption or q.message.text or ""
     guide_id = S("sahovat_guide_id","")
+    u    = db.get_user(uid)
+    name = uname(u) if u else str(uid)
 
     if action == "ok":
         db.confirm_sahovat_payment(pay_id)
+        # Admin xabarini yangilash + "Bog'lanish" tugmasi
+        new_cap = cap + f"\n\n✅ Sahovat tasdiqlandi! Rahmat ❤️"
+        kb_admin = InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"💬 {name} ga xabar yuborish",
+                                 callback_data=f"sah_reply_{uid}")]
+        ])
         try:
-            await q.edit_message_caption(cap + f"\n\n✅ Sahovat tasdiqlandi! Rahmat ❤️")
+            await q.edit_message_caption(new_cap, reply_markup=kb_admin)
         except:
-            await q.edit_message_text(cap + f"\n\n✅ Sahovat tasdiqlandi!")
-        # Foydalanuvchiga xabar + qo'llanma
-        msg = (
-            f"🤲 Sahovat to'lovingiz tasdiqlandi!\n\n"
-            f"❤️ To'lovingizning {pct}% mehribonlik uyiga yo'naltirildi.\n\n"
-            f"Yaxshilik qilganingiz uchun katta rahmat!\n"
-            f"Dunyoni yaxshilar yoritadi! ✨"
+            await q.edit_message_text(new_cap, reply_markup=kb_admin)
+
+        # Foydalanuvchiga motivatsion xabar
+        motivatsion = (
+            f"🤲 Sahovat to'lovingiz tasdiqlandi!\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"Assalomu alaykum, {name}! 👋\n\n"
+            f"Bugun Siz oddiy bir ish qilmadingiz —\n"
+            f"Siz birovning hayotiga nur olib kirdingiz. 🌟\n\n"
+            f"❤️ To'lovingizning 50% mehribonlik uyidagi\n"
+            f"bolalarga yo'naltirildi.\n\n"
+            f"💡 Bilasizmi?\n"
+            f"Rasululloh ﷺ aytdilar:\n"
+            f"«Sadaqa mol-mulkni kamaytirmaydi»\n"
+            f"(Muslim, 2588)\n\n"
+            f"Siz bugun savobga sherik bo'ldingiz —\n"
+            f"bu savob, in sha Alloh, Qiyomat kuni\n"
+            f"Sizning tarozingizda bo'ladi. 🌙\n\n"
+            f"Dunyoni yaxshilar o'zgartiradi.\n"
+            f"Siz o'sha yaxshilardansiz! ✨\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🙏 Legistman jamoasi nomidan katta rahmat!"
         )
         try:
-            await context.bot.send_message(uid, msg)
+            await context.bot.send_message(uid, motivatsion)
         except: pass
+
         # Sahovat qo'llanmasini yuborish
         if guide_id:
             try:
@@ -389,7 +412,7 @@ async def sahovat_payment_action(update: Update, context: ContextTypes.DEFAULT_T
                 if g and g.get("file_id"):
                     await context.bot.send_document(
                         uid, g["file_id"],
-                        caption=f"📖 {g['title']}\n\nSahovat qilganlar uchun maxsus qo'llanma 🎁",
+                        caption=f"🎁 Sahovat qilganlar uchun maxsus qo'llanma\n\n📖 {g['title']}",
                         protect_content=True)
                 elif g and g.get("content"):
                     await context.bot.send_message(
@@ -924,6 +947,25 @@ async def admin_reply_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data["reply_to_name"] = name
     await q.edit_message_text(f"✍️ {name} ga javob yozing:\n\nBekor: /admin")
 
+async def sahovat_reply_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin sahovat tasdiqlangandan keyin foydalanuvchiga fayl+xabar yuboradi"""
+    q = update.callback_query; await q.answer()
+    if not is_admin(q.from_user.id): return
+    tid  = int(q.data.replace("sah_reply_", ""))
+    u    = db.get_user(tid)
+    name = uname(u) if u else str(tid)
+    context.user_data["step"]             = "sahovat_reply"
+    context.user_data["reply_to_uid"]     = tid
+    context.user_data["reply_to_name"]    = name
+    await context.bot.send_message(
+        q.from_user.id,
+        f"📨 {name} ga xabar va/yoki qo'llanma yuboring:\n\n"
+        f"• Matn yozsangiz — xabar yuboriladi\n"
+        f"• Fayl (PDF) yuborsangiz — fayl biriktiriladi\n"
+        f"• Avval fayl, keyin matn yozsangiz — ikkalasi ham yuboriladi\n\n"
+        f"Bekor: /admin"
+    )
+
 # ═══════════════════════════════════════════════════════
 #  ADMIN PANEL
 # ═══════════════════════════════════════════════════════
@@ -1415,6 +1457,16 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = context.user_data.get("step","")
     doc  = update.message.document
     if not doc: return
+    if step == "sahovat_reply":
+        # Admin fayl yubordi — matnini kutamiz
+        context.user_data["sahovat_reply_file"] = doc.file_id
+        tid  = context.user_data.get("reply_to_uid")
+        name = context.user_data.get("reply_to_name","")
+        await update.message.reply_text(
+            f"✅ Fayl qabul qilindi!\n\n"
+            f"Endi {name} ga yuboriladigan xabar matnini yozing.\n"
+            f"(Faqat fayl yuborish uchun '.' yozing)\n\nBekor: /admin")
+        return
     if step == "waiting_pdf_file":
         context.user_data["pdf_file_id"] = doc.file_id
         context.user_data["step"]        = "pdf_key"
@@ -1452,6 +1504,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]))
             except:
                 await update.message.reply_text("❌ Xabar yuborib bo'lmadi.")
+        return
+
+    # Sahovat reply (matn qismi)
+    if step == "sahovat_reply" and is_admin(uid):
+        tid  = context.user_data.get("reply_to_uid")
+        name = context.user_data.get("reply_to_name","")
+        # Agar fayl allaqachon yuborilgan bo'lsa — matnni caption sifatida saqlaymiz
+        # Agar fayl kutilmasa — faqat matn yuboriladi
+        file_id = context.user_data.get("sahovat_reply_file")
+        if file_id:
+            # Fayl bor, matn ham kirdi — ikkalasini yuboramiz
+            caption_txt = "" if txt == "." else f"📬 Admin xabari:\n{'━'*22}\n{txt}"
+            context.user_data.clear()
+            try:
+                await context.bot.send_document(
+                    tid, file_id,
+                    caption=caption_txt or None)
+                await update.message.reply_text(
+                    f"✅ Fayl va xabar yuborildi → {name}",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]))
+            except:
+                await update.message.reply_text("❌ Yuborib bo'lmadi.")
+        else:
+            # Faqat matn
+            context.user_data.clear()
+            try:
+                await context.bot.send_message(
+                    tid,
+                    f"📬 Admin xabari:\n{'━'*22}\n{txt}")
+                await update.message.reply_text(
+                    f"✅ Xabar yuborildi → {name}",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]))
+            except:
+                await update.message.reply_text("❌ Yuborib bo'lmadi.")
         return
 
     # Yangi foydalanuvchi ro'yxati
@@ -1945,9 +2031,10 @@ def main():
     app.add_handler(CallbackQueryHandler(sahovat_info,    pattern=r"^sahovat_info$"))
     app.add_handler(CallbackQueryHandler(sahovat_proof,   pattern=r"^sahovat_proof$"))
     app.add_handler(CallbackQueryHandler(sahovat_payment_action, pattern=r"^sah_(ok|no)_\d+_\d+$"))
-    app.add_handler(CallbackQueryHandler(contact_admin,   pattern=r"^contact_admin$"))
-    app.add_handler(CallbackQueryHandler(admin_reply_prompt, pattern=r"^reply_\d+$"))
-    app.add_handler(CallbackQueryHandler(adm_reregister,   pattern=r"^adm_reregister_\d+$"))
+    app.add_handler(CallbackQueryHandler(sahovat_reply_prompt,   pattern=r"^sah_reply_\d+$"))
+    app.add_handler(CallbackQueryHandler(contact_admin,          pattern=r"^contact_admin$"))
+    app.add_handler(CallbackQueryHandler(admin_reply_prompt,     pattern=r"^reply_\d+$"))
+    app.add_handler(CallbackQueryHandler(adm_reregister,         pattern=r"^adm_reregister_\d+$"))
 
     # Testlar
     app.add_handler(CallbackQueryHandler(pro_locked_test,    pattern=r"^pro_locked_\d+$"))
