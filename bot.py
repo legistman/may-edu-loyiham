@@ -524,7 +524,22 @@ async def sahovat_payment_action(update: Update, context: ContextTypes.DEFAULT_T
                 "Iltimos adminga murojaat qiling.")
         except: pass
 
-async def send_proof(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def sahovat_edit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin sahovat miqdorini tahrirlaydi"""
+    q = update.callback_query; await q.answer()
+    if not is_admin(q.from_user.id): return
+    parts  = q.data.split("_")  # sah_edit_PAYID_UID
+    pay_id = int(parts[2])
+    uid    = int(parts[3])
+    context.user_data["step"]            = "sah_admin_edit_amount"
+    context.user_data["edit_pay_id"]     = pay_id
+    context.user_data["edit_pay_uid"]    = uid
+    context.user_data["edit_msg_id"]     = q.message.message_id
+    context.user_data["edit_msg_caption"]= q.message.caption or q.message.text or ""
+    await context.bot.send_message(
+        q.from_user.id,
+        f"✏️ To'lov #{pay_id} uchun haqiqiy miqdorni yozing (so'mda):\n\n"
+        f"Masalan: 20 000\n\nBekor: /admin")
     q = update.callback_query; await q.answer()
     context.user_data["step"] = "waiting_proof"
     await q.edit_message_text(
@@ -1454,8 +1469,10 @@ async def adm_sah_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if reports:
         for r in reports:
             text += (
-                f"#{r['id']} | {r['period']}\n"
-                f"💰 {r['total_sum']} → 🏠 {r['charity_sum']} | ✍️ {r['author_sum']}\n"
+                f"#{r['id']} | 📅 {r['period']}\n"
+                f"💰 Jami to'langan: {r['total_sum']} so'm\n"
+                f"🏥 Ehson uchun: {r['charity_sum']} so'm\n"
+                f"✍️ Qalam haqi: {r['author_sum']} so'm\n"
                 f"👥 {r['donors_count']} kishi\n\n"
             )
             kb.append([InlineKeyboardButton(
@@ -1554,8 +1571,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🤲 Sahovat cheki qabul qilindi!\n\n"
             "Admin ko'rib chiqadi va tasdiqlaydi. ❤️")
         amt_txt = f"{amount} so'm" if amount else "ko'rsatilmagan"
-        kb = [[InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"sah_ok_{pay_id}_{uid}"),
-               InlineKeyboardButton("❌ Rad etish",  callback_data=f"sah_no_{pay_id}_{uid}")]]
+        kb = [
+            [InlineKeyboardButton("✅ Tasdiqlash",       callback_data=f"sah_ok_{pay_id}_{uid}"),
+             InlineKeyboardButton("❌ Rad etish",        callback_data=f"sah_no_{pay_id}_{uid}")],
+            [InlineKeyboardButton("✏️ Miqdorni tahrirlash", callback_data=f"sah_edit_{pay_id}_{uid}")],
+        ]
         await context.bot.send_photo(
             ADMIN_ID, photo[-1].file_id,
             caption=f"🤲 Yangi sahovat!\n\n"
@@ -1616,7 +1636,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = context.user_data.get("step","")
     txt  = (update.message.text or "").strip()
 
-    # Sahovat hisoboti kiritish — bosqichma-bosqich
+    # Admin sahovat miqdorini tahrirlash
+    if step == "sah_admin_edit_amount" and is_admin(uid):
+        pay_id  = context.user_data.get("edit_pay_id")
+        pay_uid = context.user_data.get("edit_pay_uid")
+        msg_id  = context.user_data.get("edit_msg_id")
+        old_cap = context.user_data.get("edit_msg_caption","")
+        context.user_data.clear()
+        # Bazada miqdorni yangilash
+        db.conn.execute("UPDATE sahovat_payments SET amount=? WHERE id=?", (txt, pay_id))
+        db.conn.commit()
+        # Admin xabarini yangilash
+        new_cap = old_cap
+        if "Miqdor:" in old_cap:
+            import re
+            new_cap = re.sub(r"💰 Miqdor:.*", f"💰 Miqdor: {txt} so'm ✏️", old_cap)
+        else:
+            new_cap = old_cap + f"\n💰 Miqdor: {txt} so'm ✏️"
+        kb = [
+            [InlineKeyboardButton("✅ Tasdiqlash",          callback_data=f"sah_ok_{pay_id}_{pay_uid}"),
+             InlineKeyboardButton("❌ Rad etish",           callback_data=f"sah_no_{pay_id}_{pay_uid}")],
+            [InlineKeyboardButton("✏️ Miqdorni tahrirlash", callback_data=f"sah_edit_{pay_id}_{pay_uid}")],
+        ]
+        try:
+            await context.bot.edit_message_caption(
+                chat_id=ADMIN_ID, message_id=msg_id,
+                caption=new_cap,
+                reply_markup=InlineKeyboardMarkup(kb))
+        except:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=ADMIN_ID, message_id=msg_id,
+                    text=new_cap,
+                    reply_markup=InlineKeyboardMarkup(kb))
+            except: pass
+        await update.message.reply_text(
+            f"✅ Miqdor {txt} so'm ga yangilandi!")
+        return
     if step == "sah_report_period" and is_admin(uid):
         context.user_data["sah_rep_period"] = txt
         context.user_data["step"] = "sah_report_total"
@@ -1810,8 +1866,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "🤲 Sahovat cheki qabul qilindi!\n\n"
                 "Admin ko'rib chiqadi va siz qo'llanmani olasiz. ❤️")
-            kb = [[InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"sah_ok_{pay_id}_{uid}"),
-                   InlineKeyboardButton("❌ Rad etish",  callback_data=f"sah_no_{pay_id}_{uid}")]]
+            kb = [
+                [InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"sah_ok_{pay_id}_{uid}"),
+                 InlineKeyboardButton("❌ Rad etish",  callback_data=f"sah_no_{pay_id}_{uid}")],
+                [InlineKeyboardButton("✏️ Miqdorni tahrirlash", callback_data=f"sah_edit_{pay_id}_{uid}")],
+            ]
             await context.bot.send_document(
                 ADMIN_ID, doc.file_id,
                 caption=f"🤲 Yangi sahovat (fayl)!\n\n"
@@ -2088,7 +2147,7 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "adm_rating_test":  await adm_rating_test_list(update, context)
     elif data == "adm_sahovat":      await adm_sahovat_payments(update, context)
     elif data == "adm_sah_report":   await adm_sah_report(update, context)
-    elif data == "adm_add_sah_report": await adm_add_sah_report(update, context)
+    elif data.startswith("sah_edit_"):       await sahovat_edit_amount(update, context)
     elif data.startswith("del_sah_report_"):
         if not is_admin(q.from_user.id): return
         rid = int(data.split("_")[-1])
@@ -2287,6 +2346,7 @@ def main():
     app.add_handler(CallbackQueryHandler(sahovat_report,         pattern=r"^sahovat_report$"))
     app.add_handler(CallbackQueryHandler(sahovat_proof,          pattern=r"^sahovat_proof$"))
     app.add_handler(CallbackQueryHandler(sahovat_payment_action, pattern=r"^sah_(ok|no)_\d+_\d+$"))
+    app.add_handler(CallbackQueryHandler(sahovat_edit_amount,    pattern=r"^sah_edit_\d+_\d+$"))
     app.add_handler(CallbackQueryHandler(sahovat_reply_prompt,   pattern=r"^sah_reply_\d+$"))
     app.add_handler(CallbackQueryHandler(contact_admin,          pattern=r"^contact_admin$"))
     app.add_handler(CallbackQueryHandler(admin_reply_prompt,     pattern=r"^reply_\d+$"))
