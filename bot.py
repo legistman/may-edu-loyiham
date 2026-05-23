@@ -1701,34 +1701,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"O'tkazib yuborish uchun — ni yozing")
         return
 
-    if step == "sah_report_note" and is_admin(uid):
-        note   = "" if txt == "-" else txt
-        period = context.user_data.get("sah_rep_period","")
-        total  = context.user_data.get("sah_rep_total","")
-        donors = context.user_data.get("sah_rep_donors","0")
-        # 50/50 hisoblash
-        try:
-            clean = total.replace(" ","").replace(",","")
-            val   = int(clean)
-            charity = f"{val//2:,}".replace(",", " ")
-            author  = f"{val//2:,}".replace(",", " ")
-        except:
-            charity = total
-            author  = total
-        db.add_sahovat_report(period, total, charity, author, int(donors) if donors.isdigit() else 0, note)
-        context.user_data.clear()
-        await update.message.reply_text(
-            f"✅ Hisobot saqlandi!\n\n"
-            f"📅 Davr: {period}\n"
-            f"💰 Jami: {total} so'm\n"
-            f"🏠 Mehribonlik uyi: {charity} so'm\n"
-            f"✍️ Qalam haqi: {author} so'm\n"
-            f"👥 Donorlar: {donors} kishi",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("📊 Hisobotlar", callback_data="adm_sah_report")],
-                [InlineKeyboardButton("🔧 Admin",      callback_data="adm_back")],
-            ]))
-        return
+    if step == "admin_reply" and is_admin(uid):
         tid  = context.user_data.get("reply_to_uid")
         name = context.user_data.get("reply_to_name","")
         context.user_data.clear()
@@ -1743,7 +1716,31 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("❌ Xabar yuborib bo'lmadi.")
         return
 
-    # Sahovat — o'z miqdorini kiritish
+    if step == "sah_report_note" and is_admin(uid):
+        note   = "" if txt == "-" else txt
+        period = context.user_data.get("sah_rep_period","")
+        total  = context.user_data.get("sah_rep_total","")
+        donors = context.user_data.get("sah_rep_donors","0")
+        try:
+            clean   = total.replace(" ","").replace(",","")
+            val     = int(clean)
+            charity = f"{val//2:,}".replace(",", " ")
+            author  = f"{val//2:,}".replace(",", " ")
+        except:
+            charity = total
+            author  = total
+        db.add_sahovat_report(period, total, charity, author, int(donors) if donors.isdigit() else 0, note)
+        context.user_data.clear()
+        await update.message.reply_text(
+            f"✅ Hisobot saqlandi!\n\n"
+            f"📅 Davr: {period}\n💰 Jami: {total} so'm\n"
+            f"🏥 Ehson: {charity} so'm\n✍️ Qalam haqi: {author} so'm\n"
+            f"👥 Donorlar: {donors} kishi",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📊 Hisobotlar", callback_data="adm_sah_report")],
+                [InlineKeyboardButton("🔧 Admin",      callback_data="adm_back")],
+            ]))
+        return
     if step == "waiting_sahovat_custom_amount":
         context.user_data["sahovat_amount"] = txt
         context.user_data["step"] = "waiting_sahovat_proof"
