@@ -347,6 +347,13 @@ async def sahovat_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [back("back_welcome")],
         ]))
 
+async def sahovat_proof(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    context.user_data["step"] = "waiting_sahovat_proof"
+    await q.edit_message_text(
+        "📸 Sahovat to'lovi chekini yuboring (rasm yoki fayl).\n\n"
+        "Miqdorni ham yozing agar xohlasangiz.\n\nBekor: /start")
+
 async def sahovat_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
     reports = db.get_sahovat_reports(5)
