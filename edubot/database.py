@@ -69,6 +69,15 @@ class Database:
             amount     TEXT DEFAULT '',
             status     TEXT DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+        c.execute("""CREATE TABLE IF NOT EXISTS sahovat_reports (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            period        TEXT NOT NULL,
+            total_sum     TEXT NOT NULL,
+            charity_sum   TEXT NOT NULL,
+            author_sum    TEXT NOT NULL,
+            donors_count  INTEGER DEFAULT 0,
+            note          TEXT DEFAULT '',
+            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
 
         defaults = [
             ('pro_price',         '349 000'),
@@ -80,7 +89,6 @@ class Database:
             ('sahovat_card',      '9860 3501 4876 2387'),
             ('sahovat_owner',     'Mallayev Ozodbek'),
             ('sahovat_percent',   '10'),
-            ('sahovat_guide_id',  ''),
         ]
         for k, v in defaults:
             c.execute("INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)", (k, v))
@@ -402,6 +410,25 @@ Siz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imk
         r = self.conn.execute(
             "SELECT COUNT(*) FROM sahovat_payments WHERE status='confirmed'").fetchone()
         return {"confirmed_count": r[0] if r else 0}
+
+    # ── SAHOVAT HISOBOTLARI ──────────────────────────────────────────────────
+    def add_sahovat_report(self, period, total_sum, charity_sum, author_sum, donors_count, note=""):
+        self.conn.execute(
+            """INSERT INTO sahovat_reports
+               (period, total_sum, charity_sum, author_sum, donors_count, note)
+               VALUES (?,?,?,?,?,?)""",
+            (period, total_sum, charity_sum, author_sum, donors_count, note))
+        self.conn.commit()
+
+    def get_sahovat_reports(self, limit=5):
+        rows = self.conn.execute(
+            "SELECT * FROM sahovat_reports ORDER BY created_at DESC LIMIT ?",
+            (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_sahovat_report(self, report_id):
+        self.conn.execute("DELETE FROM sahovat_reports WHERE id=?", (report_id,))
+        self.conn.commit()
 
     # ── REFERRAL ─────────────────────────────────────────────────────────────
     def add_referral(self, inviter_id, invited_id):
