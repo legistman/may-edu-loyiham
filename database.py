@@ -64,11 +64,12 @@ class Database:
             text     TEXT NOT NULL,
             photo_id TEXT DEFAULT '')""")
         c.execute("""CREATE TABLE IF NOT EXISTS sahovat_payments (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id    INTEGER,
-            amount     TEXT DEFAULT '',
-            status     TEXT DEFAULT 'pending',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id      INTEGER,
+            amount       TEXT DEFAULT '',
+            payment_type TEXT DEFAULT 'guide',
+            status       TEXT DEFAULT 'pending',
+            created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
         c.execute("""CREATE TABLE IF NOT EXISTS sahovat_reports (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             period        TEXT NOT NULL,
@@ -110,6 +111,7 @@ Siz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imk
             "ALTER TABLE pdf_tests ADD COLUMN time_limit INTEGER DEFAULT 30",
             "ALTER TABLE guides ADD COLUMN file_id TEXT DEFAULT ''",
             "ALTER TABLE start_message ADD COLUMN photo_id TEXT DEFAULT ''",
+            "ALTER TABLE sahovat_payments ADD COLUMN payment_type TEXT DEFAULT 'guide'",
         ]:
             try: c.execute(sql)
             except: pass
@@ -383,10 +385,10 @@ Siz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imk
         return [dict(r) for r in rows]
 
     # ── SAHOVAT TO'LOVLARI ───────────────────────────────────────────────────
-    def add_sahovat_payment(self, user_id, amount=""):
+    def add_sahovat_payment(self, user_id, amount="", payment_type="guide"):
         self.conn.execute(
-            "INSERT INTO sahovat_payments (user_id, amount) VALUES (?,?)",
-            (user_id, amount))
+            "INSERT INTO sahovat_payments (user_id, amount, payment_type) VALUES (?,?,?)",
+            (user_id, amount, payment_type))
         self.conn.commit()
 
     def get_pending_sahovat_payments(self):
@@ -410,6 +412,40 @@ Siz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imk
         r = self.conn.execute(
             "SELECT COUNT(*) FROM sahovat_payments WHERE status='confirmed'").fetchone()
         return {"confirmed_count": r[0] if r else 0}
+
+    def get_weekly_sahovat_stats(self):
+        """Haftalik (oxirgi 7 kun) statistika — type bo'yicha ajratilgan"""
+        from datetime import datetime, timedelta
+        week_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+        rows = self.conn.execute(
+            "SELECT amount, payment_type FROM sahovat_payments "
+            "WHERE status='confirmed' AND created_at >= ?", (week_ago,)).fetchall()
+        guide_total = 0; ehson_total = 0; guide_cnt = 0; ehson_cnt = 0
+        for r in rows:
+            try:
+                val = int(str(r["amount"]).replace(" ","").replace(",",""))
+            except: val = 0
+            if r["payment_type"] == "ehson":
+                ehson_total += val; ehson_cnt += 1
+            else:
+                guide_total += val; guide_cnt += 1
+        # Hisoblash: guide → 50/50, ehson → 100% xayriya
+        guide_charity = guide_total // 2
+        guide_author  = guide_total - guide_charity
+        ehson_charity = ehson_total
+        total_charity = guide_charity + ehson_charity
+        total_author  = guide_author
+        grand_total   = guide_total + ehson_total
+        return {
+            "grand_total":   grand_total,
+            "guide_total":   guide_total,
+            "guide_cnt":     guide_cnt,
+            "ehson_total":   ehson_total,
+            "ehson_cnt":     ehson_cnt,
+            "total_charity": total_charity,
+            "total_author":  total_author,
+            "donors_cnt":    guide_cnt + ehson_cnt,
+        }
 
     # ── SAHOVAT HISOBOTLARI ──────────────────────────────────────────────────
     def add_sahovat_report(self, period, total_sum, charity_sum, author_sum, donors_count, note=""):
