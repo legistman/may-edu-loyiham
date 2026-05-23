@@ -342,39 +342,58 @@ async def sahovat_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]))
 
 async def sahovat_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Foydalanuvchi miqdor tanlaydi"""
+    """Foydalanuvchi niyatini tanlaydi"""
     q = update.callback_query; await q.answer()
     await q.edit_message_text(
-        "💰 Qancha sahovat qilmoqchisiz?\n\n"
-        "Miqdorni tanlang yoki o'zingiz kiriting:",
+        "🤲 Niyatingizni tanlang:\n\n"
+        "📖 Qo'llanma uchun — qo'llanma olish va yaxshilikka sherik bo'lish\n"
+        "❤️ Faqat ehson — 100% og'ir betob bolalar va mehribonlik uyiga",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📖 Qo'llanma uchun", callback_data="sah_niyat_guide")],
+            [InlineKeyboardButton("❤️ Faqat ehson",     callback_data="sah_niyat_ehson")],
+            [back("sahovat_info")],
+        ]))
+
+async def sahovat_niyat_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Niyat tanlangandan keyin miqdor so'raladi"""
+    q = update.callback_query; await q.answer()
+    niyat = "guide" if "guide" in q.data else "ehson"
+    context.user_data["sahovat_type"] = niyat
+    niyat_text = "📖 Qo'llanma uchun" if niyat == "guide" else "❤️ Faqat ehson"
+    foiz_text  = "50% xayriya / 50% qalam haqi" if niyat == "guide" else "100% xayriya"
+    await q.edit_message_text(
+        f"✅ Niyat: {niyat_text}\n"
+        f"💡 Taqsimot: {foiz_text}\n\n"
+        f"💰 Miqdorni tanlang:",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("5 000 so'm",  callback_data="sah_amt_5000"),
              InlineKeyboardButton("10 000 so'm", callback_data="sah_amt_10000")],
             [InlineKeyboardButton("20 000 so'm", callback_data="sah_amt_20000"),
              InlineKeyboardButton("50 000 so'm", callback_data="sah_amt_50000")],
             [InlineKeyboardButton("✏️ Boshqa miqdor", callback_data="sah_amt_custom")],
-            [back("sahovat_info")],
+            [back("sahovat_amount")],
         ]))
 
 async def sahovat_amount_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Miqdor tanlangandan keyin karta ko'rsatiladi"""
     q = update.callback_query; await q.answer()
-    card  = S("sahovat_card", S("card_number","9860 3501 4876 2387"))
-    owner = S("sahovat_owner", S("card_owner","Mallayev Ozodbek"))
+    card    = S("sahovat_card", S("card_number","9860 3501 4876 2387"))
+    owner   = S("sahovat_owner", S("card_owner","Mallayev Ozodbek"))
     amt_key = q.data.replace("sah_amt_","")
     amounts = {"5000":"5 000","10000":"10 000","20000":"20 000","50000":"50 000"}
     amount  = amounts.get(amt_key,"")
+    niyat   = context.user_data.get("sahovat_type","guide")
+    foiz    = "50% xayriya / 50% qalam haqi" if niyat == "guide" else "100% xayriya"
     context.user_data["sahovat_amount"] = amount
     context.user_data["step"] = "waiting_sahovat_proof"
     await q.edit_message_text(
-        f"✅ Tanlangan miqdor: {amount} so'm\n\n"
+        f"✅ Miqdor: {amount} so'm\n"
+        f"💡 Taqsimot: {foiz}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"💳 Kartaga o'tkazing:\n`{card}`\n"
         f"👤 Egasi: {owner}\n"
         f"💰 Miqdor: {amount} so'm\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"O'tkazib bo'lgach, to'lov chekini (screenshot)\n"
-        f"shu yerga yuboring. 📸",
+        f"O'tkazib bo'lgach chekni shu yerga yuboring 📸",
         parse_mode="Markdown")
 
 async def sahovat_amount_custom(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -437,33 +456,22 @@ async def sahovat_payment_action(update: Update, context: ContextTypes.DEFAULT_T
     if action == "ok":
         db.confirm_sahovat_payment(pay_id)
 
-        # Hisobotga avtomatik qo'shish
-        from datetime import datetime
-        now    = datetime.now()
-        period = now.strftime("%B %Y")   # masalan: May 2026
-        # Bu oygi to'lovlarni hisoblaymiz
-        month_start = now.strftime("%Y-%m-01")
-        rows = db.conn.execute(
-            "SELECT amount FROM sahovat_payments WHERE status='confirmed' "
-            "AND created_at >= ?", (month_start,)).fetchall()
-        total_val = 0
-        for row in rows:
-            try:
-                total_val += int(str(row["amount"]).replace(" ","").replace(",",""))
-            except: pass
-        charity_val = total_val // 2
-        author_val  = total_val - charity_val
-        donors_cnt  = len(rows)
-        total_str   = f"{total_val:,}".replace(",", " ")
-        charity_str = f"{charity_val:,}".replace(",", " ")
-        author_str  = f"{author_val:,}".replace(",", " ")
-        # Joriy oy hisobotini yangilaymiz (bor bo'lsa o'chir, yangisini qo'sh)
+        # Haftalik hisobotni qayta hisoblash (type bo'yicha)
+        from datetime import datetime, timedelta
+        now      = datetime.now()
+        week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+        period   = f"{(now - timedelta(days=6)).strftime('%d.%m')}–{now.strftime('%d.%m.%Y')}"
+        stats    = db.get_weekly_sahovat_stats()
+        # Haftalik hisobotni yangilash
         db.conn.execute("DELETE FROM sahovat_reports WHERE period=?", (period,))
         db.conn.commit()
-        db.add_sahovat_report(period, total_str, charity_str, author_str, donors_cnt)
+        total_str   = f"{stats['grand_total']:,}".replace(",", " ")
+        charity_str = f"{stats['total_charity']:,}".replace(",", " ")
+        author_str  = f"{stats['total_author']:,}".replace(",", " ")
+        db.add_sahovat_report(period, total_str, charity_str, author_str, stats["donors_cnt"])
 
         # Admin xabarini yangilash
-        new_cap = cap + f"\n\n✅ Tasdiqlandi! Rahmat ❤️"
+        new_cap = cap + "\n\n✅ Tasdiqlandi! Rahmat ❤️"
         kb_admin = InlineKeyboardMarkup([
             [InlineKeyboardButton(f"💬 {name} ga xabar yuborish",
                                  callback_data=f"sah_reply_{uid}")]
@@ -474,14 +482,20 @@ async def sahovat_payment_action(update: Update, context: ContextTypes.DEFAULT_T
             await q.edit_message_text(new_cap, reply_markup=kb_admin)
 
         # Foydalanuvchiga motivatsion xabar
+        pay_row  = db.conn.execute(
+            "SELECT payment_type FROM sahovat_payments WHERE id=?", (pay_id,)).fetchone()
+        ptype    = pay_row["payment_type"] if pay_row else "guide"
+        if ptype == "ehson":
+            xayriya_qism = "❤️ To'lovingiz 100% og'ir betob bolalar\nva mehribonlik uyiga yo'naltirildi."
+        else:
+            xayriya_qism = "❤️ To'lovingizning 50% og'ir betob bolalar\nva mehribonlik uyiga yo'naltirildi."
         motivatsion = (
             f"🤲 Sahovat to'lovingiz tasdiqlandi!\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"Assalomu alaykum, {name}! 👋\n\n"
             f"Bugun Siz oddiy bir ish qilmadingiz —\n"
             f"Siz birovning hayotiga nur olib kirdingiz. 🌟\n\n"
-            f"❤️ To'lovingizning 50% og'ir betob bolalar\n"
-            f"va mehribonlik uyiga yo'naltirildi.\n\n"
+            f"{xayriya_qism}\n\n"
             f"💡 Bilasizmi?\n"
             f"Rasululloh ﷺ aytdilar:\n"
             f"«Sadaqa mol-mulkni kamaytirmaydi»\n"
@@ -1524,12 +1538,14 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Sahovat cheki
     if step == "waiting_sahovat_proof":
-        user   = update.effective_user
-        u      = db.get_user(uid)
-        name   = uname(u) if u else user.first_name
-        amount = context.user_data.get("sahovat_amount", "")
-        pct    = S("sahovat_percent","10")
-        db.add_sahovat_payment(uid, amount)
+        user    = update.effective_user
+        u       = db.get_user(uid)
+        name    = uname(u) if u else user.first_name
+        amount  = context.user_data.get("sahovat_amount", "")
+        niyat   = context.user_data.get("sahovat_type", "guide")
+        niyat_t = "📖 Qo'llanma" if niyat == "guide" else "❤️ Ehson"
+        foiz_t  = "50% xayriya / 50% qalam haqi" if niyat == "guide" else "100% xayriya"
+        db.add_sahovat_payment(uid, amount, niyat)
         pay_id = db.conn.execute(
             "SELECT id FROM sahovat_payments WHERE user_id=? ORDER BY id DESC LIMIT 1",
             (uid,)).fetchone()["id"]
@@ -1545,7 +1561,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption=f"🤲 Yangi sahovat!\n\n"
                     f"👤 {name}\n🆔 {uid}\n📛 @{user.username or 'yoq'}\n"
                     f"💰 Miqdor: {amt_txt}\n"
-                    f"💡 50% og'ir betob bolalar va mehribonlik uyiga",
+                    f"🎯 Niyat: {niyat_t}\n"
+                    f"💡 Taqsimot: {foiz_t}",
             reply_markup=InlineKeyboardMarkup(kb))
         return
 
@@ -1676,13 +1693,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["step"] = "waiting_sahovat_proof"
         card  = S("sahovat_card", S("card_number","9860 3501 4876 2387"))
         owner = S("sahovat_owner", S("card_owner","Mallayev Ozodbek"))
+        niyat = context.user_data.get("sahovat_type","guide")
+        foiz  = "50% xayriya / 50% qalam haqi" if niyat == "guide" else "100% xayriya"
         await update.message.reply_text(
-            f"✅ Miqdor: {txt} so'm\n\n"
+            f"✅ Miqdor: {txt} so'm\n"
+            f"💡 Taqsimot: {foiz}\n\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"💳 Kartaga o'tkazing:\n`{card}`\n"
             f"👤 Egasi: {owner}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"O'tkazib bo'lgach, to'lov chekini shu yerga yuboring 📸",
+            f"O'tkazib bo'lgach chekni shu yerga yuboring 📸",
             parse_mode="Markdown")
         return
     if step == "sahovat_reply" and is_admin(uid):
@@ -2050,9 +2070,10 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "✍️ Iltimos, asl ismingiz va familiyangizni to'liq kiriting:\n\n"
             "📝 Masalan: Mallayev Ozodbek\n\n"
             "Bu ma'lumot faqat bot ichida ishlatiladi.")
-    elif data == "sahovat_amount":       await sahovat_amount(update, context)
-    elif data == "sah_amt_custom":       await sahovat_amount_custom(update, context)
-    elif data.startswith("sah_amt_"):    await sahovat_amount_selected(update, context)
+    elif data == "sahovat_amount":        await sahovat_amount(update, context)
+    elif data.startswith("sah_niyat_"):   await sahovat_niyat_selected(update, context)
+    elif data == "sah_amt_custom":        await sahovat_amount_custom(update, context)
+    elif data.startswith("sah_amt_"):     await sahovat_amount_selected(update, context)
     elif data.startswith("adm_reregister_"):
         pass  # alohida handler tomonidan ushlanadi
     elif data == "adm_tests":        await adm_tests(update, context)
@@ -2194,6 +2215,50 @@ async def pro_expiry_reminder(context):
 # ═══════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════
+async def send_weekly_report(context: ContextTypes.DEFAULT_TYPE):
+    """Har juma 20:00 da kanalga haftalik hisobot yuboriladi"""
+    from datetime import datetime, timedelta
+    now    = datetime.now()
+    stats  = db.get_weekly_sahovat_stats()
+    if stats["donors_cnt"] == 0:
+        return  # Bu hafta hech kim sahovat qilmagan — yuborma
+    ch     = S("channel","@legistman")
+    period = f"{(now - timedelta(days=6)).strftime('%d.%m')}–{now.strftime('%d.%m.%Y')}"
+
+    def fmt(v): return f"{v:,}".replace(",", " ")
+
+    text = (
+        f"📊 Haftalik sahovat hisoboti\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📅 {period}\n\n"
+        f"👥 Jami donorlar: {stats['donors_cnt']} kishi\n"
+        f"💰 Jami yig'ildi: {fmt(stats['grand_total'])} so'm\n\n"
+    )
+    if stats["guide_cnt"]:
+        text += (
+            f"📖 Qo'llanma uchun: {stats['guide_cnt']} kishi\n"
+            f"   Yig'ildi: {fmt(stats['guide_total'])} so'm\n\n"
+        )
+    if stats["ehson_cnt"]:
+        text += (
+            f"❤️ Faqat ehson: {stats['ehson_cnt']} kishi\n"
+            f"   Yig'ildi: {fmt(stats['ehson_total'])} so'm\n\n"
+        )
+    text += (
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏥 Og'ir betob bolalar +\n"
+        f"   Mehribonlik uyiga: {fmt(stats['total_charity'])} so'm\n"
+        f"✍️ Qalam haqi: {fmt(stats['total_author'])} so'm\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"Sahovat qilganlarga Alloh baraka bersin! 🤲\n"
+        f"Siz ham qo'shilishingiz mumkin 👉 @legistman_bot"
+    )
+    try:
+        await context.bot.send_message(ch, text)
+    except Exception as e:
+        await context.bot.send_message(ADMIN_ID,
+            f"⚠️ Haftalik hisobot kanalga yuborilmadi:\n{e}")
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -2216,6 +2281,7 @@ def main():
     app.add_handler(CallbackQueryHandler(payment_action,  pattern=r"^pay_(ok|no)_\d+$"))
     app.add_handler(CallbackQueryHandler(sahovat_info,           pattern=r"^sahovat_info$"))
     app.add_handler(CallbackQueryHandler(sahovat_amount,         pattern=r"^sahovat_amount$"))
+    app.add_handler(CallbackQueryHandler(sahovat_niyat_selected, pattern=r"^sah_niyat_(guide|ehson)$"))
     app.add_handler(CallbackQueryHandler(sahovat_amount_custom,  pattern=r"^sah_amt_custom$"))
     app.add_handler(CallbackQueryHandler(sahovat_amount_selected,pattern=r"^sah_amt_\d+$"))
     app.add_handler(CallbackQueryHandler(sahovat_report,         pattern=r"^sahovat_report$"))
@@ -2274,6 +2340,12 @@ def main():
             pro_expiry_reminder,
             time=dtime(hour=10, minute=0),
             name="pro_reminder")
+        # Har juma soat 20:00 da haftalik sahovat hisoboti
+        app.job_queue.run_daily(
+            send_weekly_report,
+            time=dtime(hour=20, minute=0),
+            days=(4,),   # 4 = juma (0=dushanba)
+            name="weekly_sahovat_report")
 
     print("✅ Bot ishga tushdi!")
     app.run_polling(drop_pending_updates=True)
