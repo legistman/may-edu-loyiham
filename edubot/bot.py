@@ -1,7 +1,7 @@
 import logging, os, re, time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                           MessageHandler, filters, ContextTypes)
 from database import Database
@@ -11,6 +11,7 @@ db       = Database()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_TOKEN")
 ADMIN_ID  = int(os.getenv("ADMIN_ID", "123456789"))
 TZ        = ZoneInfo("Asia/Tashkent")
+WEBAPP_BASE = "https://legistman.github.io/may-edu-loyiham"
 
 def now():       return datetime.now(TZ)
 def S(k, d=""):  return db.get_setting(k) or d
@@ -157,7 +158,12 @@ async def about_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📊 Batafsil tahlil va reyting ko'rasiz\n\n"
         "🤖 Bot yaratuvchisi: @legistman_uz\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━",
-        reply_markup=InlineKeyboardMarkup([[back("back_welcome")]]))
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                "📱 Bot haqida to'liq tanishtirish",
+                web_app=WebAppInfo(url=f"{WEBAPP_BASE}/bot_webapp.html"))],
+            [back("back_welcome")],
+        ]))
 
 # ═══════════════════════════════════════════════════════
 #  BEPUL MENYU
@@ -342,6 +348,9 @@ async def sahovat_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Yaxshilik qiling — dunyoni yoritaylik! ✨",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                "📱 Sahovat haqida batafsil",
+                web_app=WebAppInfo(url=f"{WEBAPP_BASE}/sahovat_webapp.html"))],
             [InlineKeyboardButton("🤲 Sahovat qilish",  callback_data="sahovat_amount")],
             [InlineKeyboardButton("📊 Hisobot",         callback_data="sahovat_report")],
             [back("back_welcome")],
