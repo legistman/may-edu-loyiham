@@ -311,9 +311,15 @@ async def buy_pro(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"4️⃣ Admin 24 soat ichida ko'rib chiqadi ✅",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📸 Chek yuboraman", callback_data="send_proof")],
+            [InlineKeyboardButton("📸 Chek yuboraman", callback_data="pro_send_proof")],
             [back("back_welcome")],
         ]))
+
+async def pro_send_proof(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    context.user_data["step"] = "waiting_proof"
+    await q.edit_message_text(
+        "📸 PRO to'lov chekini yuboring (rasm yoki fayl).\n\nBekor: /start")
 
 # ═══════════════════════════════════════════════════════
 #  SAHOVAT
@@ -2332,8 +2338,8 @@ def main():
     app.add_handler(CallbackQueryHandler(pro_menu,        pattern=r"^pro_menu$"))
     app.add_handler(CallbackQueryHandler(pro_tests_list,  pattern=r"^pro_tests$"))
     app.add_handler(CallbackQueryHandler(pro_guides_list, pattern=r"^pro_guides$"))
-    app.add_handler(CallbackQueryHandler(buy_pro,         pattern=r"^buy_pro$"))
-    app.add_handler(CallbackQueryHandler(send_proof,      pattern=r"^send_proof$"))
+    app.add_handler(CallbackQueryHandler(buy_pro,          pattern=r"^buy_pro$"))
+    app.add_handler(CallbackQueryHandler(pro_send_proof,   pattern=r"^pro_send_proof$"))
     app.add_handler(CallbackQueryHandler(payment_action,  pattern=r"^pay_(ok|no)_\d+$"))
     app.add_handler(CallbackQueryHandler(sahovat_info,           pattern=r"^sahovat_info$"))
     app.add_handler(CallbackQueryHandler(sahovat_amount,         pattern=r"^sahovat_amount$"))
