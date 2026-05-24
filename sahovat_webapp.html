@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sahovat bo'limi — Legistman</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --tg-theme-bg-color: #F2F2F7;
+    --tg-theme-text-color: #1C1C1E;
+  }
+</style>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow-x:hidden}
+  body{background:#F2F2F7;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;margin:0;padding:0}
+  .phone{width:100%;max-width:480px;margin:0 auto}
+  .screen{background:#F2F2F7;border-radius:0;overflow:hidden;border:none}
+
+  /* ── HEADER ── */
+  .hdr{background:#0F6E56;padding:28px 20px 36px;text-align:center;position:relative}
+  .hdr-ico{width:56px;height:56px;border-radius:16px;background:rgba(255,255,255,0.18);margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:26px}
+  .hdr-t{color:#fff;font-size:19px;font-weight:600;margin-bottom:4px}
+  .hdr-s{color:rgba(255,255,255,0.7);font-size:13px}
+  .wave{height:22px;background:#F2F2F7;border-radius:22px 22px 0 0;margin-top:-11px}
+
+  /* ── BODY ── */
+  .body{padding:4px 16px 20px}
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .stat{background:#fff;border-radius:14px;padding:14px 12px;text-align:center;border:0.5px solid rgba(0,0,0,0.07)}
+  .stat-n{font-size:22px;font-weight:700;color:#0F6E56}
+  .stat-l{font-size:11px;color:#8E8E93;margin-top:3px;line-height:1.4}
+  .desc{background:#fff;border-radius:14px;padding:14px;border:0.5px solid rgba(0,0,0,0.07);margin-bottom:14px}
+  .desc p{font-size:13px;color:#3C3C43;line-height:1.65}
+  .main-btn{background:#0F6E56;color:#fff;border:none;border-radius:14px;width:100%;padding:15px;font-size:15px;font-weight:600;text-align:center}
+
+  /* ── NAV ── */
+  .nav{padding:12px 16px 4px;display:flex;align-items:center}
+  .back{color:#0F6E56;font-size:14px;display:flex;align-items:center;gap:3px}
+  .back svg{width:16px;height:16px;stroke:#0F6E56;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+  .trow{padding:4px 16px 12px;text-align:center}
+  .thead{font-size:17px;font-weight:600;color:#1C1C1E}
+  .tsub{font-size:12px;color:#8E8E93;margin-top:2px}
+
+  /* ── NIYAT ── */
+  .ncard{margin:0 16px 11px;border-radius:14px;border:0.5px solid rgba(0,0,0,0.08);background:#fff;overflow:hidden}
+  .ntop{display:flex;align-items:center;gap:12px;padding:14px}
+  .nico{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+  .nico.g{background:#E1F5EE}
+  .nico.e{background:#FBEAF0}
+  .nlbl{font-size:15px;font-weight:600;color:#1C1C1E}
+  .ndesc{font-size:12px;color:#8E8E93;margin-top:1px}
+  .ndiv{height:0.5px;background:rgba(0,0,0,0.07);margin:0 14px}
+  .npills{display:flex;gap:6px;padding:9px 14px}
+  .pill{font-size:10px;padding:3px 9px;border-radius:20px;font-weight:600}
+  .pill.g{background:#E1F5EE;color:#085041}
+  .pill.p{background:#FBEAF0;color:#72243E}
+  .pill.gr{background:#F2F2F7;color:#5F5E5A}
+  .chev svg{width:14px;height:14px;stroke:#C7C7CC;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;margin-left:auto}
+  .hadis{margin:4px 16px 14px;background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);padding:11px 14px}
+  .hadis p{font-size:12px;color:#8E8E93;line-height:1.65;font-style:italic}
+
+  /* ── MIQDOR ── */
+  .badge-row{padding:2px 16px 8px}
+  .sbadge{display:inline-block;font-size:11px;padding:4px 11px;border-radius:20px;font-weight:600}
+  .sbadge.g{background:#E1F5EE;color:#085041}
+  .sbadge.e{background:#FBEAF0;color:#72243E}
+  .amt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 16px 11px}
+  .abtn{background:#fff;border:0.5px solid rgba(0,0,0,0.1);border-radius:14px;padding:15px 12px;text-align:center}
+  .abtn.sel{background:#0F6E56;border-color:#0F6E56}
+  .abtn.sel .an{color:#fff}
+  .abtn.sel .ac{color:rgba(255,255,255,0.7)}
+  .an{font-size:17px;font-weight:600;color:#1C1C1E}
+  .ac{font-size:10px;color:#8E8E93;margin-top:2px}
+  .custom-row{margin:0 16px 11px}
+  .cinp{width:100%;background:#fff;border:0.5px solid rgba(0,0,0,0.1);border-radius:14px;padding:13px 15px;font-size:14px;color:#1C1C1E}
+  .split{margin:0 16px 13px;background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);padding:12px 14px}
+  .slbl{font-size:10px;color:#8E8E93;font-weight:600;margin-bottom:8px;letter-spacing:0.04em}
+  .srow{display:flex;justify-content:space-between;margin-bottom:4px}
+  .sk{font-size:13px;color:#3C3C43}
+  .sv{font-size:13px;font-weight:600;color:#1C1C1E}
+  .sbar{height:6px;background:#E5E5EA;border-radius:3px;margin-top:8px;overflow:hidden}
+  .sfill{height:100%;border-radius:3px;background:#0F6E56}
+  .act{padding:0 16px 4px}
+  .actbtn{background:#0F6E56;color:#fff;border:none;border-radius:14px;width:100%;padding:15px;font-size:15px;font-weight:600;text-align:center}
+
+  /* ── KARTA ── */
+  .csec{padding:6px 16px 18px}
+  .bcard{background:#0F6E56;border-radius:16px;padding:18px;margin-bottom:13px;position:relative;overflow:hidden}
+  .bp1{position:absolute;right:-15px;top:-15px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,0.08)}
+  .bp2{position:absolute;right:18px;bottom:-28px;width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,0.06)}
+  .bchip{width:28px;height:20px;background:rgba(255,255,255,0.25);border-radius:4px;margin-bottom:16px}
+  .bnum{font-size:14px;color:#fff;letter-spacing:0.12em;font-weight:500;margin-bottom:13px}
+  .bfoot{display:flex;justify-content:space-between;align-items:flex-end}
+  .bowl{font-size:9px;color:rgba(255,255,255,0.5);margin-bottom:2px}
+  .bown{font-size:12px;color:rgba(255,255,255,0.85)}
+  .blogo{font-size:10px;color:rgba(255,255,255,0.6);font-weight:600;letter-spacing:0.06em}
+  .amtbadge{background:#fff;border-radius:14px;padding:13px 15px;border:0.5px solid rgba(0,0,0,0.07);margin-bottom:11px;display:flex;align-items:center;justify-content:space-between}
+  .abl{font-size:13px;color:#8E8E93}
+  .abv{font-size:20px;font-weight:700;color:#0F6E56}
+  .hint{background:#FFF9E6;border-radius:12px;padding:10px 13px;border:0.5px solid rgba(186,117,23,0.2);margin-bottom:13px;display:flex;align-items:flex-start;gap:8px}
+  .hint svg{width:15px;height:15px;stroke:#854F0B;fill:none;stroke-width:2;flex-shrink:0;margin-top:1px}
+  .hint span{font-size:12px;color:#854F0B;line-height:1.55}
+  .proof{background:#0F6E56;color:#fff;border:none;border-radius:14px;width:100%;padding:15px;font-size:15px;font-weight:600;text-align:center}
+
+  /* ── HISOBOT ── */
+  .report-hdr{background:#0F6E56;padding:20px 18px 26px;position:relative}
+  .rh-row{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .rh-ico{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;font-size:20px}
+  .rh-t{color:#fff;font-size:16px;font-weight:600}
+  .rh-s{color:rgba(255,255,255,0.7);font-size:12px}
+  .rh-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .rhs{background:rgba(255,255,255,0.15);border-radius:10px;padding:10px 8px;text-align:center}
+  .rhs-n{font-size:16px;font-weight:700;color:#fff}
+  .rhs-l{font-size:9px;color:rgba(255,255,255,0.65);margin-top:2px}
+  .rwave{height:20px;background:#F2F2F7;border-radius:20px 20px 0 0;margin-top:-10px}
+  .rbody{padding:4px 16px 20px}
+  .week-card{background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);margin-bottom:11px;overflow:hidden}
+  .wch{padding:12px 14px 10px;border-bottom:0.5px solid rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between}
+  .wct{font-size:13px;font-weight:600;color:#1C1C1E}
+  .wcs{font-size:11px;color:#8E8E93}
+  .wrow{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:0.5px solid rgba(0,0,0,0.04)}
+  .wrow:last-child{border-bottom:none}
+  .wleft{display:flex;align-items:center;gap:8px}
+  .wdot{width:8px;height:8px;border-radius:50%}
+  .wdot.g{background:#0F6E56}
+  .wdot.p{background:#D4537E}
+  .wdot.gr{background:#C7C7CC}
+  .wlbl{font-size:13px;color:#3C3C43}
+  .wamt{font-size:13px;font-weight:600;color:#1C1C1E}
+  .wpct{font-size:11px;color:#8E8E93;margin-left:4px}
+
+  .donor-list{background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);margin-bottom:11px;overflow:hidden}
+  .dl-hdr{padding:11px 14px;border-bottom:0.5px solid rgba(0,0,0,0.06);display:flex;justify-content:space-between;align-items:center}
+  .dl-t{font-size:13px;font-weight:600;color:#1C1C1E}
+  .dl-cnt{font-size:11px;color:#8E8E93}
+  .drow{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:0.5px solid rgba(0,0,0,0.04)}
+  .drow:last-child{border-bottom:none}
+  .dava{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
+  .dava.g{background:#E1F5EE;color:#085041}
+  .dava.e{background:#FBEAF0;color:#72243E}
+  .dinfo{flex:1}
+  .dname{font-size:13px;font-weight:500;color:#1C1C1E}
+  .dtype{font-size:11px;color:#8E8E93;margin-top:1px}
+  .damt{text-align:right}
+  .damtv{font-size:13px;font-weight:600;color:#0F6E56}
+  .ddate{font-size:11px;color:#8E8E93;margin-top:1px}
+
+  .bar-card{background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);padding:14px;margin-bottom:11px}
+  .bar-lbl{font-size:10px;color:#8E8E93;font-weight:600;margin-bottom:12px;letter-spacing:0.04em}
+  .bar-row{margin-bottom:10px}
+  .bar-top{display:flex;justify-content:space-between;margin-bottom:5px}
+  .bar-k{font-size:12px;color:#3C3C43}
+  .bar-v{font-size:12px;font-weight:600;color:#1C1C1E}
+  .bar-track{height:7px;background:#F2F2F7;border-radius:4px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:4px}
+  .bar-fill.teal{background:#0F6E56}
+  .bar-fill.pink{background:#D4537E}
+  .bar-fill.gray{background:#C7C7CC}
+
+  .total-card{background:#0F6E56;border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  .tc-l{font-size:13px;color:rgba(255,255,255,0.8)}
+  .tc-v{font-size:20px;font-weight:700;color:#fff}
+
+  /* ── DONE ── */
+  .done{padding:24px 16px;display:flex;flex-direction:column;align-items:center;background:#F2F2F7}
+  .done-ico{width:68px;height:68px;background:#E1F5EE;border-radius:22px;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+  .done-ico svg{width:32px;height:32px;stroke:#0F6E56;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+  .done-t{font-size:18px;font-weight:600;color:#1C1C1E;margin-bottom:6px}
+  .done-s{font-size:13px;color:#8E8E93;line-height:1.6;margin-bottom:20px;text-align:center}
+  .steps-box{background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);padding:14px;margin-bottom:18px;width:100%}
+  .steps-lbl{font-size:10px;color:#8E8E93;font-weight:600;margin-bottom:10px;letter-spacing:0.04em}
+  .strow{display:flex;align-items:flex-start;gap:10px;margin-bottom:9px}
+  .strow:last-child{margin-bottom:0}
+  .stnum{width:22px;height:22px;background:#E1F5EE;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#0F6E56;flex-shrink:0}
+  .sttxt{font-size:13px;color:#3C3C43;line-height:1.5;padding-top:2px}
+</style>
+</head>
+<body>
+<script>
+  if (window.Telegram && window.Telegram.WebApp) {
+    Telegram.WebApp.ready();
+    Telegram.WebApp.expand();
+    Telegram.WebApp.setHeaderColor("#0F6E56");
+  }
+</script>
+
+<div class="label">1 — Bosh sahifa</div>
+<div class="phone"><div class="screen">
+  <div class="hdr">
+    <div class="hdr-ico">🤲</div>
+    <div class="hdr-t">Sahovat bo'limi</div>
+    <div class="hdr-s">Legistman boti</div>
+  </div>
+  <div class="wave"></div>
+  <div class="body">
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-n">50%</div><div class="stat-l">Og'ir betob bolalar va mehribonlik uyi</div></div>
+      <div class="stat"><div class="stat-n">50%</div><div class="stat-l">Qo'llanma qalam haqi</div></div>
+    </div>
+    <div class="desc"><p>Sahovat qilish uchun hech qanday qat'iy narx yo'q. Har kim o'z imkoniyati va vijdonidan kelib chiqib istalgan miqdorda sahovat qiladi.</p></div>
+    <div class="main-btn">🤲 Sahovat qilish</div>
+    <div style="height:10px"></div>
+    <div style="background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+      <div style="font-size:14px;color:#1C1C1E;font-weight:500">📊 Hisobot</div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#C7C7CC" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+  </div>
+</div></div>
+
+<div class="label">2 — Niyat tanlash</div>
+<div class="phone"><div class="screen">
+  <div class="nav">
+    <div class="back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Orqaga</div>
+  </div>
+  <div class="trow"><div class="thead">Niyatingizni tanlang</div><div class="tsub">Pul qanday taqsimlanishini belgilaydi</div></div>
+  <div class="ncard">
+    <div class="ntop">
+      <div class="nico g">📖</div>
+      <div style="flex:1"><div class="nlbl">Qo'llanma uchun</div><div class="ndesc">Qo'llanma olib, savobga sherik bo'lish</div></div>
+      <div class="chev"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+    </div>
+    <div class="ndiv"></div>
+    <div class="npills"><span class="pill g">50% — Ehson</span><span class="pill gr">50% — Qalam haqi</span></div>
+  </div>
+  <div class="ncard">
+    <div class="ntop">
+      <div class="nico e">❤️</div>
+      <div style="flex:1"><div class="nlbl">Faqat ehson</div><div class="ndesc">Sof niyat — hech qanday manfaat kutmasdan</div></div>
+      <div class="chev"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+    </div>
+    <div class="ndiv"></div>
+    <div class="npills"><span class="pill p">100% — Ehson</span></div>
+  </div>
+  <div class="hadis"><p>"Sadaqa mol-mulkni kamaytirmaydi" — Muslim, 2588</p></div>
+</div></div>
+
+<div class="label">3 — Qo'llanma uchun: tafsilot</div>
+<div class="phone"><div class="screen">
+  <div class="nav"><div class="back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Orqaga</div></div>
+  <div style="padding:6px 16px 8px"><span class="sbadge g">📖 Qo'llanma uchun</span></div>
+  <div class="trow" style="text-align:left;padding-top:0"><div class="thead">Miqdorni tanlang</div></div>
+  <div class="amt-grid">
+    <div class="abtn"><div class="an">5 000</div><div class="ac">so'm</div></div>
+    <div class="abtn sel"><div class="an">20 000</div><div class="ac">so'm</div></div>
+    <div class="abtn"><div class="an">30 000</div><div class="ac">so'm</div></div>
+    <div class="abtn"><div class="an">50 000</div><div class="ac">so'm</div></div>
+  </div>
+  <div class="custom-row"><div class="cinp" style="color:#C7C7CC;font-size:14px">Boshqa miqdor...</div></div>
+  <div class="split">
+    <div class="slbl">TAQSIMOT</div>
+    <div class="srow"><div class="sk">🏥 Ehson</div><div class="sv">10 000 so'm</div></div>
+    <div class="srow"><div class="sk">✍️ Qalam haqi</div><div class="sv">10 000 so'm</div></div>
+    <div class="sbar"><div class="sfill" style="width:50%"></div></div>
+  </div>
+  <div class="act"><div class="actbtn">Davom etish</div></div>
+</div></div>
+
+<div class="label">4 — Faqat ehson: tafsilot</div>
+<div class="phone"><div class="screen">
+  <div class="nav"><div class="back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Orqaga</div></div>
+  <div style="padding:6px 16px 8px"><span class="sbadge e">❤️ Faqat ehson</span></div>
+  <div class="trow" style="text-align:left;padding-top:0"><div class="thead">Miqdorni tanlang</div></div>
+  <div class="amt-grid">
+    <div class="abtn"><div class="an">5 000</div><div class="ac">so'm</div></div>
+    <div class="abtn"><div class="an">10 000</div><div class="ac">so'm</div></div>
+    <div class="abtn sel"><div class="an">30 000</div><div class="ac">so'm</div></div>
+    <div class="abtn"><div class="an">50 000</div><div class="ac">so'm</div></div>
+  </div>
+  <div class="custom-row"><div class="cinp" style="color:#C7C7CC;font-size:14px">Boshqa miqdor...</div></div>
+  <div class="split">
+    <div class="slbl">TAQSIMOT</div>
+    <div class="srow"><div class="sk">🏥 Ehson</div><div class="sv">30 000 so'm</div></div>
+    <div class="srow"><div class="sk" style="color:#C7C7CC">Qalam haqi yo'q</div><div class="sv" style="color:#C7C7CC">0 so'm</div></div>
+    <div class="sbar"><div class="sfill" style="width:100%;background:#D4537E"></div></div>
+  </div>
+  <div class="act"><div class="actbtn">Davom etish</div></div>
+</div></div>
+
+<div class="label">5 — To'lov kartasi</div>
+<div class="phone"><div class="screen">
+  <div class="nav"><div class="back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Orqaga</div></div>
+  <div class="trow"><div class="thead">To'lov</div><div class="tsub">Kartaga o'tkazib, chekni yuboring</div></div>
+  <div class="csec">
+    <div class="bcard">
+      <div class="bp1"></div><div class="bp2"></div>
+      <div class="bchip"></div>
+      <div class="bnum">9860 3501 4876 2387</div>
+      <div class="bfoot">
+        <div><div class="bowl">KARTA EGASI</div><div class="bown">Mallayev Ozodbek</div></div>
+        <div class="blogo">LEGISTMAN</div>
+      </div>
+    </div>
+    <div class="amtbadge"><div class="abl">To'lov miqdori</div><div class="abv">20 000 so'm</div></div>
+    <div class="hint">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>Karta raqamini nusxalab, bank ilovangiz orqali o'tkazing</span>
+    </div>
+    <div class="proof">📸 Chekni yuborish</div>
+  </div>
+</div></div>
+
+<div class="label">6 — Tasdiq kutilmoqda</div>
+<div class="phone"><div class="screen">
+  <div class="done">
+    <div class="done-ico"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+    <div class="done-t">Chek qabul qilindi!</div>
+    <div class="done-s">Admin 24 soat ichida ko'rib chiqadi.<br>Tasdiqlanishi bilanoq xabar olasiz.</div>
+    <div class="steps-box">
+      <div class="steps-lbl">NIMA BO'LADI KEYIN</div>
+      <div class="strow"><div class="stnum">1</div><div class="sttxt">Admin chekingizni tekshiradi</div></div>
+      <div class="strow"><div class="stnum">2</div><div class="sttxt">Tasdiqlangandan so'ng qo'llanma yuboriladi</div></div>
+      <div class="strow"><div class="stnum">3</div><div class="sttxt">Ehson ulushi hisobotda ko'rinadi</div></div>
+    </div>
+    <div class="actbtn" style="width:100%;text-align:center;padding:15px;border-radius:14px">Bosh sahifaga</div>
+  </div>
+</div></div>
+
+<div class="label">7 — Haftalik hisobot</div>
+<div class="phone"><div class="screen">
+  <div class="report-hdr">
+    <div class="rh-row">
+      <div class="rh-ico">📊</div>
+      <div><div class="rh-t">Haftalik hisobot</div><div class="rh-s">19.05 – 25.05.2026</div></div>
+    </div>
+    <div class="rh-stats">
+      <div class="rhs"><div class="rhs-n">8</div><div class="rhs-l">Donor</div></div>
+      <div class="rhs"><div class="rhs-n">185K</div><div class="rhs-l">Jami</div></div>
+      <div class="rhs"><div class="rhs-n">112K</div><div class="rhs-l">Ehson</div></div>
+    </div>
+  </div>
+  <div class="rwave"></div>
+  <div class="rbody">
+    <div class="total-card">
+      <div class="tc-l">Jami yig'ildi</div>
+      <div class="tc-v">185 000 so'm</div>
+    </div>
+    <div style="height:10px"></div>
+    <div class="bar-card">
+      <div class="bar-lbl">TAQSIMOT</div>
+      <div class="bar-row">
+        <div class="bar-top"><div class="bar-k">🏥 Ehson (betob bolalar)</div><div class="bar-v">112 500 so'm</div></div>
+        <div class="bar-track"><div class="bar-fill teal" style="width:61%"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-top"><div class="bar-k">✍️ Qalam haqi</div><div class="bar-v">72 500 so'm</div></div>
+        <div class="bar-track"><div class="bar-fill gray" style="width:39%"></div></div>
+      </div>
+    </div>
+    <div class="donor-list">
+      <div class="dl-hdr"><div class="dl-t">Donorlar</div><div class="dl-cnt">8 kishi</div></div>
+      <div class="drow">
+        <div class="dava g">AM</div>
+        <div class="dinfo"><div class="dname">Akbar Mirzayev</div><div class="dtype">📖 Qo'llanma uchun</div></div>
+        <div class="damt"><div class="damtv">50 000</div><div class="ddate">24.05</div></div>
+      </div>
+      <div class="drow">
+        <div class="dava e">ZR</div>
+        <div class="dinfo"><div class="dname">Zulfiya Rahimova</div><div class="dtype">❤️ Faqat ehson</div></div>
+        <div class="damt"><div class="damtv">30 000</div><div class="ddate">24.05</div></div>
+      </div>
+      <div class="drow">
+        <div class="dava g">SK</div>
+        <div class="dinfo"><div class="dname">Sardor Karimov</div><div class="dtype">📖 Qo'llanma uchun</div></div>
+        <div class="damt"><div class="damtv">20 000</div><div class="ddate">23.05</div></div>
+      </div>
+      <div class="drow">
+        <div class="dava e">NH</div>
+        <div class="dinfo"><div class="dname">Nodira Hasanova</div><div class="dtype">❤️ Faqat ehson</div></div>
+        <div class="damt"><div class="damtv">15 000</div><div class="ddate">23.05</div></div>
+      </div>
+      <div class="drow">
+        <div class="dava g">BT</div>
+        <div class="dinfo"><div class="dname">Bobur Toshmatov</div><div class="dtype">📖 Qo'llanma uchun</div></div>
+        <div class="damt"><div class="damtv">20 000</div><div class="ddate">22.05</div></div>
+      </div>
+      <div style="padding:9px 14px;text-align:center"><div style="font-size:12px;color:#0F6E56;font-weight:500">+ 3 ta donor ko'rish</div></div>
+    </div>
+    <div class="week-card">
+      <div class="wch"><div class="wct">Niyat bo'yicha</div><div class="wcs">Bu hafta</div></div>
+      <div class="wrow">
+        <div class="wleft"><div class="wdot g"></div><div class="wlbl">Qo'llanma uchun</div></div>
+        <div><span class="wamt">110 000</span><span class="wpct">5 kishi</span></div>
+      </div>
+      <div class="wrow">
+        <div class="wleft"><div class="wdot p"></div><div class="wlbl">Faqat ehson</div></div>
+        <div><span class="wamt">75 000</span><span class="wpct">3 kishi</span></div>
+      </div>
+    </div>
+  </div>
+</div></div>
+
+</body>
+</html>

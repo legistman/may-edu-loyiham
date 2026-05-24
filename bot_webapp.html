@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Legistman Bot — Tanishtirish</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow-x:hidden}body{background:#F2F2F7;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;padding:24px 16px;display:flex;flex-direction:column;align-items:center;gap:28px}
+.lbl{font-size:11px;color:#8E8E93;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;text-align:center}
+.phone{width:100%;max-width:420px}
+.screen{background:#F2F2F7;border-radius:20px;overflow:hidden;border:0.5px solid rgba(0,0,0,0.09)}
+
+/* shared */
+.hdr{padding:28px 20px 36px;text-align:center}
+.hdr.green{background:#0F6E56}
+.hdr.gold{background:#8B6914}
+.hdr.free{background:#1C5FA8}
+.hdr.gray{background:#3A3A3C}
+.hdr-ico{width:56px;height:56px;border-radius:16px;background:rgba(255,255,255,0.18);margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:26px}
+.hdr-t{color:#fff;font-size:19px;font-weight:600;margin-bottom:4px}
+.hdr-s{color:rgba(255,255,255,0.7);font-size:13px;line-height:1.5}
+.wave-w{height:22px;border-radius:22px 22px 0 0;margin-top:-11px;background:#F2F2F7}
+.wave-wh{height:22px;border-radius:22px 22px 0 0;margin-top:-11px;background:#fff}
+.body{padding:6px 16px 20px}
+.body-w{padding:6px 16px 20px;background:#fff}
+.row-btn{background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.08);padding:14px 16px;margin-bottom:9px;display:flex;align-items:center;justify-content:space-between}
+.row-btn.gold-bg{background:#FFF8E6;border-color:rgba(139,105,20,0.2)}
+.row-btn.green-bg{background:#F0FAF6;border-color:rgba(15,110,86,0.2)}
+.rb-l{font-size:14px;font-weight:500;color:#1C1C1E}
+.rb-s{font-size:11px;color:#8E8E93;margin-top:2px}
+.chv{width:14px;height:14px;stroke:#C7C7CC;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.badge{display:inline-block;font-size:10px;padding:3px 9px;border-radius:20px;font-weight:600}
+.badge.gold{background:#FFF0C0;color:#7A5800}
+.badge.green{background:#E1F5EE;color:#085041}
+.badge.blue{background:#E6F1FB;color:#0C447C}
+.badge.gray{background:#F2F2F7;color:#5F5E5A}
+.badge.free{background:#EBF3FF;color:#0B3E8A}
+
+/* nav */
+.nav{padding:12px 16px 4px;display:flex;align-items:center}
+.back{color:#0F6E56;font-size:14px;font-weight:500;display:flex;align-items:center;gap:3px}
+.back svg{width:16px;height:16px;stroke:#0F6E56;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.trow{padding:4px 16px 12px;text-align:center}
+.thead{font-size:17px;font-weight:600;color:#1C1C1E}
+.tsub{font-size:12px;color:#8E8E93;margin-top:2px}
+
+/* goal card */
+.goal{background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;gap:10px}
+.goal-ico{width:36px;height:36px;border-radius:10px;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.goal-t{font-size:13px;font-weight:500;color:#1C1C1E}
+.goal-s{font-size:11px;color:#8E8E93;margin-top:1px}
+
+/* feature list */
+.feat-box{background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);padding:12px 14px;margin-bottom:9px}
+.feat-row{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid rgba(0,0,0,0.05)}
+.feat-row:last-child{border-bottom:none;padding-bottom:0}
+.feat-row:first-child{padding-top:0}
+.feat-ico{font-size:15px;width:24px;text-align:center}
+.feat-t{font-size:13px;color:#1C1C1E}
+.feat-t.muted{color:#8E8E93;text-decoration:line-through}
+
+/* stat grid */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat{background:#fff;border-radius:14px;padding:14px 12px;text-align:center;border:0.5px solid rgba(0,0,0,0.07)}
+.stat.wide{grid-column:1/-1}
+.stat-n{font-size:22px;font-weight:700}
+.stat-n.green{color:#0F6E56}
+.stat-n.gold{color:#8B6914}
+.stat-n.blue{color:#185FA5}
+.stat-l{font-size:11px;color:#8E8E93;margin-top:3px;line-height:1.4}
+
+/* karta */
+.bcard{border-radius:16px;padding:18px;margin-bottom:13px;position:relative;overflow:hidden}
+.bcard.green{background:#0F6E56}
+.bcard.gold{background:#8B6914}
+.bp1{position:absolute;right:-15px;top:-15px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,0.08)}
+.bp2{position:absolute;right:18px;bottom:-28px;width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,0.06)}
+.bchip{width:28px;height:20px;background:rgba(255,255,255,0.25);border-radius:4px;margin-bottom:14px}
+.bnum{font-size:13px;color:#fff;letter-spacing:0.12em;font-weight:500;margin-bottom:12px}
+.bfoot{display:flex;justify-content:space-between;align-items:flex-end}
+.bowl{font-size:9px;color:rgba(255,255,255,0.5);margin-bottom:2px}
+.bown{font-size:12px;color:rgba(255,255,255,0.85)}
+.blog{font-size:10px;color:rgba(255,255,255,0.6);font-weight:600;letter-spacing:0.06em}
+
+/* price */
+.price-box{background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);padding:14px;margin-bottom:12px}
+.price-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:0.5px solid rgba(0,0,0,0.05)}
+.price-row:last-child{border-bottom:none}
+.price-k{font-size:13px;color:#8E8E93}
+.price-v{font-size:13px;font-weight:600;color:#1C1C1E}
+.price-v.big{font-size:18px;color:#8B6914}
+
+/* hint */
+.hint{background:#FFF9E6;border-radius:12px;padding:10px 13px;border:0.5px solid rgba(186,117,23,0.2);margin-bottom:12px;display:flex;align-items:flex-start;gap:8px}
+.hint svg{width:15px;height:15px;stroke:#854F0B;fill:none;stroke-width:2;flex-shrink:0;margin-top:1px}
+.hint span{font-size:12px;color:#854F0B;line-height:1.55}
+
+/* green hint */
+.hint-g{background:#E1F5EE;border-radius:12px;padding:10px 13px;border:0.5px solid rgba(15,110,86,0.15);margin-bottom:12px;display:flex;align-items:flex-start;gap:8px}
+.hint-g svg{width:15px;height:15px;stroke:#085041;fill:none;stroke-width:2;flex-shrink:0;margin-top:1px}
+.hint-g span{font-size:12px;color:#085041;line-height:1.55}
+
+/* buttons */
+.main-btn{border:none;border-radius:14px;width:100%;padding:15px;font-size:15px;font-weight:600;text-align:center;margin-bottom:9px;display:block}
+.main-btn.green{background:#0F6E56;color:#fff}
+.main-btn.gold{background:#8B6914;color:#fff}
+.main-btn.free{background:#1C5FA8;color:#fff}
+.main-btn.gray{background:#E5E5EA;color:#3A3A3C}
+.main-btn.outline{background:#fff;color:#0F6E56;border:0.5px solid rgba(15,110,86,0.4)}
+
+/* test card */
+.test-card{background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);margin-bottom:9px;overflow:hidden}
+.tc-head{padding:12px 14px;border-bottom:0.5px solid rgba(0,0,0,0.06);display:flex;align-items:center;justify-content:space-between}
+.tc-t{font-size:14px;font-weight:600;color:#1C1C1E}
+.tc-body{padding:11px 14px}
+.tc-row{display:flex;justify-content:space-between;margin-bottom:5px}
+.tc-row:last-child{margin-bottom:0}
+.tc-k{font-size:12px;color:#8E8E93}
+.tc-v{font-size:12px;font-weight:500;color:#1C1C1E}
+.progress{height:6px;background:#F2F2F7;border-radius:3px;margin-top:8px;overflow:hidden}
+.prog-fill{height:100%;border-radius:3px}
+.prog-fill.green{background:#0F6E56}
+.prog-fill.gold{background:#8B6914}
+.prog-fill.red{background:#E24B4A}
+
+/* result */
+.result-circle{width:80px;height:80px;border-radius:50%;margin:8px auto 14px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff}
+.result-circle.great{background:#0F6E56}
+.result-circle.ok{background:#8B6914}
+.result-circle.bad{background:#E24B4A}
+
+/* profile */
+.avatar{width:60px;height:60px;border-radius:50%;background:#E1F5EE;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#085041}
+.profile-name{font-size:17px;font-weight:600;color:#1C1C1E;text-align:center;margin-bottom:4px}
+.profile-sub{font-size:12px;color:#8E8E93;text-align:center;margin-bottom:14px}
+
+/* list items */
+.list-item{background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.li-ico{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.li-ico.green{background:#E1F5EE}
+.li-ico.gold{background:#FFF0C0}
+.li-ico.blue{background:#E6F1FB}
+.li-ico.gray{background:#F2F2F7}
+.li-t{font-size:14px;font-weight:500;color:#1C1C1E}
+.li-s{font-size:11px;color:#8E8E93;margin-top:2px}
+
+/* rating row */
+.rr{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:0.5px solid rgba(0,0,0,0.05)}
+.rr:last-child{border-bottom:none}
+.rr-num{width:24px;font-size:13px;font-weight:600;color:#8E8E93;text-align:center}
+.rr-num.top{color:#8B6914}
+.rr-ava{width:32px;height:32px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#085041}
+.rr-name{font-size:13px;font-weight:500;color:#1C1C1E;flex:1}
+.rr-score{font-size:13px;font-weight:600;color:#0F6E56}
+
+/* section divider */
+.sdiv{padding:14px 0 6px;font-size:11px;color:#8E8E93;font-weight:600;letter-spacing:0.05em}
+
+/* steps */
+.step-box{background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);padding:14px;margin-bottom:10px}
+.step-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:9px}
+.step-row:last-child{margin-bottom:0}
+.step-n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+.step-n.green{background:#E1F5EE;color:#085041}
+.step-n.gold{background:#FFF0C0;color:#7A5800}
+.step-t{font-size:13px;color:#3C3C43;line-height:1.5;padding-top:3px}
+
+/* bottom tab */
+.tab-bar{background:#fff;border-top:0.5px solid rgba(0,0,0,0.09);display:flex;padding:10px 0 14px}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.tab-ico{font-size:20px}
+.tab-lbl{font-size:10px;color:#8E8E93}
+.tab-lbl.active{color:#0F6E56;font-weight:600}
+</style>
+</head>
+<body>
+<script>
+  if (window.Telegram && window.Telegram.WebApp) {
+    Telegram.WebApp.ready();
+    Telegram.WebApp.expand();
+    Telegram.WebApp.setHeaderColor("#0F6E56");
+  }
+</script>
+
+<!-- ① KANAL TEKSHIRUVI -->
+<div class="lbl">1 — Kanal obunasi tekshiruvi</div>
+<div class="phone"><div class="screen">
+  <div style="padding:40px 20px 20px;text-align:center;background:#F2F2F7">
+    <div style="font-size:48px;margin-bottom:16px">📢</div>
+    <div style="font-size:17px;font-weight:600;color:#1C1C1E;margin-bottom:6px">Avval kanalga a'zo bo'ling</div>
+    <div style="font-size:13px;color:#8E8E93;line-height:1.6;margin-bottom:24px">Botdan foydalanish uchun<br><strong style="color:#1C1C1E">@legistman</strong> kanaliga a'zo bo'ling</div>
+    <div style="background:#0F6E56;color:#fff;border-radius:14px;padding:15px;font-size:15px;font-weight:600;margin-bottom:10px">📢 @legistman kanalga o'tish</div>
+    <div style="background:#fff;color:#0F6E56;border:0.5px solid rgba(15,110,86,0.4);border-radius:14px;padding:13px;font-size:14px;font-weight:500">✅ A'zo bo'ldim — tekshirish</div>
+  </div>
+</div></div>
+
+<!-- ② RO'YXATDAN O'TISH -->
+<div class="lbl">2 — Ro'yxatdan o'tish</div>
+<div class="phone"><div class="screen">
+  <div class="hdr green">
+    <div class="hdr-ico">⚖️</div>
+    <div class="hdr-t">Legistman Bot</div>
+    <div class="hdr-s">@legistman kanalining rasmiy o'quv boti</div>
+  </div>
+  <div class="wave-w"></div>
+  <div class="body-w">
+    <div style="font-size:13px;color:#3C3C43;line-height:1.7;margin-bottom:14px">Xush kelibsiz! Bu bot orqali huquqiy bilimlaringizni sinab ko'ring va rivojlantiring.</div>
+    <div style="background:#F2F2F7;border-radius:14px;padding:13px 15px;margin-bottom:9px;border:0.5px solid rgba(0,0,0,0.07)">
+      <div style="font-size:12px;color:#8E8E93;margin-bottom:5px">Ismingiz va familiyangizni kiriting</div>
+      <div style="font-size:14px;color:#C7C7CC">Masalan: Mallayev Ozodbek</div>
+    </div>
+    <div class="hint-g">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>Bu ma'lumot faqat bot ichida ishlatiladi va tashqariga chiqarilmaydi</span>
+    </div>
+  </div>
+</div></div>
+
+<!-- ③ BOSH MENYU (BEPUL) -->
+<div class="lbl">3 — Bosh menyu (bepul foydalanuvchi)</div>
+<div class="phone"><div class="screen">
+  <div class="hdr green">
+    <div class="hdr-ico">👋</div>
+    <div class="hdr-t">Xush kelibsiz, Alisher!</div>
+    <div class="hdr-s">🎯 Bugungi maqsad: 1 ta test yeching!</div>
+  </div>
+  <div class="wave-w"></div>
+  <div class="body-w">
+    <div class="row-btn">
+      <div><div class="rb-l">ℹ️ Bot haqida</div></div>
+      <svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+    <div class="row-btn">
+      <div><div class="rb-l">🆓 Bepul versiya</div><div class="rb-s">Testlar va qo'llanmalar</div></div>
+      <svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+    <div class="row-btn gold-bg">
+      <div><div class="rb-l">👑 PRO versiya</div><div class="rb-s">Barcha imkoniyatlar · 349 000 so'm</div></div>
+      <svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+    <div class="row-btn green-bg">
+      <div><div class="rb-l">🤲 Sahovat qilish</div><div class="rb-s">Ezgu amal — 50% ehson</div></div>
+      <svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+    <div class="row-btn">
+      <div><div class="rb-l">📩 Adminga murojaat</div></div>
+      <svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+  </div>
+</div></div>
+
+<!-- ④ BOSH MENYU (PRO) -->
+<div class="lbl">4 — Bosh menyu (PRO foydalanuvchi)</div>
+<div class="phone"><div class="screen">
+  <div class="hdr" style="background:#1A4A3A;padding:24px 20px 32px;text-align:center">
+    <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.15);border-radius:20px;padding:4px 12px;margin-bottom:12px">
+      <span style="font-size:12px;color:#fff;font-weight:600">👑 PRO OBUNA</span>
+    </div>
+    <div class="hdr-t">Xush kelibsiz, Alisher!</div>
+    <div class="hdr-s">PRO obuna: 24.06.2026 gacha aktiv ✅</div>
+    <div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.7)">✅ Bugungi maqsad bajarildi!</div>
+  </div>
+  <div class="wave-w"></div>
+  <div class="body-w">
+    <div class="row-btn gold-bg">
+      <div><div class="rb-l">👑 PRO bo'lim</div><div class="rb-s">Testlar, qo'llanmalar, statistika</div></div>
+      <svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+    <div class="row-btn green-bg">
+      <div><div class="rb-l">🤲 Sahovat qilish</div><div class="rb-s">Ezgu amal — 50% ehson</div></div>
+      <svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+    <div class="row-btn">
+      <div><div class="rb-l">📩 Adminga murojaat</div></div>
+      <svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+  </div>
+</div></div>
+
+<!-- ⑤ BEPUL BO'LIM -->
+<div class="lbl">5 — Bepul bo'lim</div>
+<div class="phone"><div class="screen">
+  <div class="hdr free">
+    <div class="hdr-ico">🆓</div>
+    <div class="hdr-t">Bepul bo'lim</div>
+    <div class="hdr-s">Asosiy imkoniyatlar</div>
+  </div>
+  <div class="wave-w"></div>
+  <div class="body-w">
+    <div class="feat-box">
+      <div class="feat-row"><div class="feat-ico">✅</div><div class="feat-t">Bepul testlar (cheklangan)</div></div>
+      <div class="feat-row"><div class="feat-ico">✅</div><div class="feat-t">Bepul qo'llanmalar</div></div>
+      <div class="feat-row"><div class="feat-ico">✅</div><div class="feat-t">Umumiy statistika</div></div>
+      <div class="feat-row"><div class="feat-ico">🔒</div><div class="feat-t muted">PRO testlar (yopiq)</div></div>
+      <div class="feat-row"><div class="feat-ico">🔒</div><div class="feat-t muted">Xato tahlili (yopiq)</div></div>
+      <div class="feat-row"><div class="feat-ico">🔒</div><div class="feat-t muted">Shaxsiy reyting (yopiq)</div></div>
+    </div>
+    <div class="row-btn"><div><div class="rb-l">📝 Testlar</div></div><svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+    <div class="row-btn"><div><div class="rb-l">📚 Qo'llanmalar</div></div><svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+    <div class="row-btn"><div><div class="rb-l">📊 Statistika</div></div><svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+    <div class="row-btn gold-bg"><div><div class="rb-l">👑 PRO olish</div><div class="rb-s">349 000 so'm / 30 kun</div></div><svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+  </div>
+</div></div>
+
+<!-- ⑥ TEST RO'YXATI -->
+<div class="lbl">6 — Testlar ro'yxati</div>
+<div class="phone"><div class="screen">
+  <div class="nav"><div class="back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Orqaga</div></div>
+  <div class="trow"><div class="thead">Testlar</div><div class="tsub">🆓 Bepul &nbsp;·&nbsp; 🔒 PRO kerak</div></div>
+  <div class="body">
+    <div class="list-item">
+      <div class="li-ico blue">📝</div>
+      <div><div class="li-t">Fuqarolik huquqi asoslari</div><div class="li-s"><span class="badge free">🆓 Bepul</span> &nbsp;20 savol · 30 daqiqa</div></div>
+    </div>
+    <div class="list-item">
+      <div class="li-ico blue">📝</div>
+      <div><div class="li-t">Mehnat huquqi</div><div class="li-s"><span class="badge free">🆓 Bepul</span> &nbsp;15 savol · 20 daqiqa</div></div>
+    </div>
+    <div class="list-item" style="opacity:0.65">
+      <div class="li-ico gray">🔒</div>
+      <div><div class="li-t" style="color:#8E8E93">Jinoyat huquqi (PRO)</div><div class="li-s"><span class="badge gold">👑 PRO</span> &nbsp;30 savol · 45 daqiqa</div></div>
+    </div>
+    <div class="list-item" style="opacity:0.65">
+      <div class="li-ico gray">🔒</div>
+      <div><div class="li-t" style="color:#8E8E93">Ma'muriy huquq (PRO)</div><div class="li-s"><span class="badge gold">👑 PRO</span> &nbsp;25 savol · 35 daqiqa</div></div>
+    </div>
+    <div class="list-item" style="opacity:0.65">
+      <div class="li-ico gray">🔒</div>
+      <div><div class="li-t" style="color:#8E8E93">Konstitutsiyaviy huquq</div><div class="li-s"><span class="badge gold">👑 PRO</span> &nbsp;20 savol · 30 daqiqa</div></div>
+    </div>
+  </div>
+</div></div>
+
+<!-- ⑦ TEST JARAYONI -->
+<div class="lbl">7 — Test jarayoni</div>
+<div class="phone"><div class="screen">
+  <div style="background:#1C5FA8;padding:16px 18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="color:rgba(255,255,255,0.75);font-size:12px">Savol 7 / 20</div>
+      <div style="background:rgba(255,255,255,0.2);border-radius:20px;padding:3px 10px;color:#fff;font-size:12px;font-weight:600">⏱ 18:43</div>
+    </div>
+    <div style="height:5px;background:rgba(255,255,255,0.2);border-radius:3px;overflow:hidden">
+      <div style="width:35%;height:100%;background:#fff;border-radius:3px"></div>
+    </div>
+  </div>
+  <div style="padding:16px">
+    <div style="background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);padding:14px;margin-bottom:12px">
+      <div style="font-size:13px;color:#8E8E93;margin-bottom:6px">7-savol</div>
+      <div style="font-size:14px;font-weight:500;color:#1C1C1E;line-height:1.6">Fuqarolik qonunchiligi bo'yicha shartnoma qaysi shaklda tuzilishi shart?</div>
+    </div>
+    <div style="background:#E6F1FB;border-radius:12px;padding:12px 14px;margin-bottom:8px;border:0.5px solid rgba(24,95,165,0.2)">
+      <div style="font-size:13px;color:#0C447C;font-weight:500">A. Og'zaki shaklda</div>
+    </div>
+    <div style="background:#fff;border-radius:12px;padding:12px 14px;margin-bottom:8px;border:0.5px solid rgba(0,0,0,0.08)">
+      <div style="font-size:13px;color:#1C1C1E">B. Yozma shaklda</div>
+    </div>
+    <div style="background:#fff;border-radius:12px;padding:12px 14px;margin-bottom:8px;border:0.5px solid rgba(0,0,0,0.08)">
+      <div style="font-size:13px;color:#1C1C1E">C. Notarial tasdiq bilan</div>
+    </div>
+    <div style="background:#fff;border-radius:12px;padding:12px 14px;margin-bottom:12px;border:0.5px solid rgba(0,0,0,0.08)">
+      <div style="font-size:13px;color:#1C1C1E">D. Istalgan shaklda</div>
+    </div>
+    <div style="background:#1C5FA8;color:#fff;border-radius:14px;padding:14px;font-size:15px;font-weight:600;text-align:center">Javobni tasdiqlash</div>
+  </div>
+</div></div>
+
+<!-- ⑧ TEST NATIJASI -->
+<div class="lbl">8 — Test natijasi (PRO)</div>
+<div class="phone"><div class="screen">
+  <div class="hdr green" style="padding:20px 18px 28px">
+    <div class="result-circle great" style="border:3px solid rgba(255,255,255,0.3)">85%</div>
+    <div class="hdr-t">Ajoyib natija!</div>
+    <div class="hdr-s">Fuqarolik huquqi asoslari</div>
+  </div>
+  <div class="wave-w"></div>
+  <div class="body-w">
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-n green">17</div><div class="stat-l">To'g'ri javob</div></div>
+      <div class="stat"><div class="stat-n" style="color:#E24B4A">3</div><div class="stat-l">Xato javob</div></div>
+      <div class="stat"><div class="stat-n" style="color:#185FA5">8:32</div><div class="stat-l">Sarflangan vaqt</div></div>
+      <div class="stat"><div class="stat-n gold">🥈 2</div><div class="stat-l">Reyting o'rni</div></div>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);overflow:hidden;margin-bottom:10px">
+      <div style="padding:10px 14px;border-bottom:0.5px solid rgba(0,0,0,0.06);font-size:12px;font-weight:600;color:#8E8E93">XATO SAVOLLAR (PRO tahlil)</div>
+      <div style="padding:10px 14px;border-bottom:0.5px solid rgba(0,0,0,0.05)">
+        <div style="font-size:13px;color:#E24B4A;font-weight:500;margin-bottom:3px">❌ 3-savol: Shartnoma shakli</div>
+        <div style="font-size:12px;color:#8E8E93">Siz: A · To'g'ri: B (Yozma shakl)</div>
+      </div>
+      <div style="padding:10px 14px;border-bottom:0.5px solid rgba(0,0,0,0.05)">
+        <div style="font-size:13px;color:#E24B4A;font-weight:500;margin-bottom:3px">❌ 11-savol: Meros huquqi</div>
+        <div style="font-size:12px;color:#8E8E93">Siz: C · To'g'ri: A</div>
+      </div>
+      <div style="padding:10px 14px">
+        <div style="font-size:13px;color:#E24B4A;font-weight:500;margin-bottom:3px">❌ 17-savol: Kafillik</div>
+        <div style="font-size:12px;color:#8E8E93">Siz: D · To'g'ri: B</div>
+      </div>
+    </div>
+    <div class="main-btn green">Yana bir bor sinab ko'rish</div>
+  </div>
+</div></div>
+
+<!-- ⑨ PRO VERSIYA TAQDIMOTI -->
+<div class="lbl">9 — PRO versiya — taklif ekrani</div>
+<div class="phone"><div class="screen">
+  <div class="hdr" style="background:#6B4F00;padding:24px 18px 32px;text-align:center">
+    <div class="hdr-ico" style="background:rgba(255,255,255,0.2);font-size:28px">👑</div>
+    <div class="hdr-t">PRO versiya</div>
+    <div class="hdr-s">Huquq sohasida professional bo'ling</div>
+  </div>
+  <div class="wave-w"></div>
+  <div class="body-w">
+    <div class="feat-box">
+      <div class="feat-row"><div class="feat-ico">✅</div><div class="feat-t">Barcha testlarga to'liq kirish</div></div>
+      <div class="feat-row"><div class="feat-ico">✅</div><div class="feat-t">Har bir xato savol ko'rsatiladi</div></div>
+      <div class="feat-row"><div class="feat-ico">✅</div><div class="feat-t">To'g'ri javoblar kaliti beriladi</div></div>
+      <div class="feat-row"><div class="feat-ico">✅</div><div class="feat-t">Shaxsiy reyting va tahlil</div></div>
+      <div class="feat-row"><div class="feat-ico">✅</div><div class="feat-t">Barcha qo'llanmalar</div></div>
+      <div class="feat-row"><div class="feat-ico">✅</div><div class="feat-t">30 kun to'liq kirish</div></div>
+    </div>
+    <div class="price-box">
+      <div class="price-row"><div class="price-k">Muddat</div><div class="price-v">30 kun</div></div>
+      <div class="price-row"><div class="price-k">Narx</div><div class="price-v big">349 000 so'm</div></div>
+      <div class="price-row"><div class="price-k">Kuniga</div><div class="price-v" style="color:#0F6E56">atigi 11 633 so'm</div></div>
+    </div>
+    <div class="main-btn gold">💳 To'lov qilish</div>
+  </div>
+</div></div>
+
+<!-- ⑩ TO'LOV -->
+<div class="lbl">10 — PRO to'lov</div>
+<div class="phone"><div class="screen">
+  <div class="nav"><div class="back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Orqaga</div></div>
+  <div class="trow"><div class="thead">To'lov ma'lumotlari</div><div class="tsub">349 000 so'm · 30 kun</div></div>
+  <div style="padding:0 16px 18px">
+    <div class="bcard gold">
+      <div class="bp1"></div><div class="bp2"></div>
+      <div class="bchip"></div>
+      <div class="bnum">9860 3501 4876 2387</div>
+      <div class="bfoot">
+        <div><div class="bowl">KARTA EGASI</div><div class="bown">Mallayev Ozodbek</div></div>
+        <div class="blog">LEGISTMAN</div>
+      </div>
+    </div>
+    <div class="step-box">
+      <div style="font-size:11px;color:#8E8E93;font-weight:600;margin-bottom:10px;letter-spacing:0.04em">QADAMLAR</div>
+      <div class="step-row"><div class="step-n gold">1</div><div class="step-t">Kartaga 349 000 so'm o'tkazing</div></div>
+      <div class="step-row"><div class="step-n gold">2</div><div class="step-t">To'lov chekini (screenshot) saqlang</div></div>
+      <div class="step-row"><div class="step-n gold">3</div><div class="step-t">Quyidagi tugmani bosib chekni yuboring</div></div>
+      <div class="step-row"><div class="step-n gold">4</div><div class="step-t">Admin 24 soat ichida ko'rib chiqadi ✅</div></div>
+    </div>
+    <div class="hint">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>Karta raqamini nusxalab, bank ilovangiz orqali o'tkazing</span>
+    </div>
+    <div class="main-btn gold">📸 Chek yuboraman</div>
+  </div>
+</div></div>
+
+<!-- ⑪ PRO BO'LIM MENYU -->
+<div class="lbl">11 — PRO bo'lim</div>
+<div class="phone"><div class="screen">
+  <div class="hdr" style="background:#1A4A3A;padding:20px 18px 28px;text-align:center">
+    <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,215,0,0.2);border-radius:20px;padding:4px 12px;margin-bottom:10px"><span style="font-size:11px;color:#FFD700;font-weight:600">👑 PRO OBUNA AKTIV</span></div>
+    <div class="hdr-t">PRO bo'lim</div>
+    <div class="hdr-s">PRO obuna: 24.06.2026 gacha aktiv ✅</div>
+  </div>
+  <div class="wave-w"></div>
+  <div class="body-w">
+    <div class="row-btn gold-bg">
+      <div><div class="rb-l">📝 Testlar</div><div class="rb-s">Barcha testlar — 12 ta</div></div>
+      <svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+    <div class="row-btn gold-bg">
+      <div><div class="rb-l">📚 Qo'llanmalar</div><div class="rb-s">To'liq kirish</div></div>
+      <svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+    <div class="row-btn gold-bg">
+      <div><div class="rb-l">📊 Statistika</div><div class="rb-s">Shaxsiy tahlil va reyting</div></div>
+      <svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+    <div class="row-btn">
+      <div><div class="rb-l">📩 Adminga murojaat</div></div>
+      <svg class="chv" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>
+  </div>
+</div></div>
+
+<!-- ⑫ STATISTIKA -->
+<div class="lbl">12 — Shaxsiy statistika</div>
+<div class="phone"><div class="screen">
+  <div class="hdr gray" style="padding:20px 18px 28px">
+    <div class="avatar" style="background:rgba(255,255,255,0.15);color:#fff">AM</div>
+    <div class="profile-name" style="color:#fff">Alisher Mirzayev</div>
+    <div class="profile-sub" style="color:rgba(255,255,255,0.65)"><span class="badge gold">👑 PRO</span></div>
+  </div>
+  <div class="wave-w"></div>
+  <div class="body-w">
+    <div class="stat-grid">
+      <div class="stat"><div class="stat-n blue">23</div><div class="stat-l">Yechilgan testlar</div></div>
+      <div class="stat"><div class="stat-n green">78%</div><div class="stat-l">O'rtacha natija</div></div>
+      <div class="stat"><div class="stat-n gold">🥇 3</div><div class="stat-l">Reyting o'rni</div></div>
+      <div class="stat"><div class="stat-n" style="color:#E24B4A">12</div><div class="stat-l">Xato savollar</div></div>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);overflow:hidden;margin-bottom:10px">
+      <div style="padding:10px 14px;border-bottom:0.5px solid rgba(0,0,0,0.06);font-size:12px;font-weight:600;color:#8E8E93">OXIRGI TESTLAR</div>
+      <div class="rr"><div class="rr-num">1</div><div style="flex:1"><div style="font-size:13px;font-weight:500;color:#1C1C1E">Fuqarolik huquqi</div><div style="font-size:11px;color:#8E8E93">Bugun</div></div><div style="text-align:right"><div class="rr-score">85%</div><div style="font-size:10px;color:#0F6E56">17/20</div></div></div>
+      <div class="rr"><div class="rr-num">2</div><div style="flex:1"><div style="font-size:13px;font-weight:500;color:#1C1C1E">Mehnat huquqi</div><div style="font-size:11px;color:#8E8E93">Kecha</div></div><div style="text-align:right"><div class="rr-score">73%</div><div style="font-size:10px;color:#8B6914">11/15</div></div></div>
+      <div class="rr"><div class="rr-num">3</div><div style="flex:1"><div style="font-size:13px;font-weight:500;color:#1C1C1E">Jinoyat huquqi</div><div style="font-size:11px;color:#8E8E93">2 kun oldin</div></div><div style="text-align:right"><div class="rr-score">90%</div><div style="font-size:10px;color:#0F6E56">27/30</div></div></div>
+    </div>
+    <div style="background:#fff;border-radius:14px;border:0.5px solid rgba(0,0,0,0.07);overflow:hidden">
+      <div style="padding:10px 14px;border-bottom:0.5px solid rgba(0,0,0,0.06);font-size:12px;font-weight:600;color:#8E8E93">UMUMIY REYTING</div>
+      <div class="rr"><div class="rr-num top">🥇</div><div class="rr-ava">BK</div><div class="rr-name">Bobur Karimov</div><div class="rr-score">95%</div></div>
+      <div class="rr"><div class="rr-num top">🥈</div><div class="rr-ava">ZN</div><div class="rr-name">Zulfiya Norova</div><div class="rr-score">91%</div></div>
+      <div class="rr" style="background:#F0FAF6"><div class="rr-num top">🥉</div><div class="rr-ava" style="background:#0F6E56;color:#fff">AM</div><div class="rr-name" style="font-weight:600">Alisher Mirzayev</div><div class="rr-score">78%</div></div>
+      <div class="rr"><div class="rr-num">4</div><div class="rr-ava">SK</div><div class="rr-name">Sardor Karimov</div><div class="rr-score">74%</div></div>
+    </div>
+  </div>
+</div></div>
+
+</body>
+</html>
