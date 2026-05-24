@@ -413,6 +413,22 @@ Siz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imk
             "SELECT COUNT(*) FROM sahovat_payments WHERE status='confirmed'").fetchone()
         return {"confirmed_count": r[0] if r else 0}
 
+    def get_confirmed_donors(self, limit=30):
+        """Tasdiqlangan har bir donor alohida yozuv bilan"""
+        rows = self.conn.execute("""
+            SELECT s.id, s.user_id, s.amount, s.payment_type, s.created_at,
+                   u.first_name, u.full_name, u.username
+            FROM sahovat_payments s JOIN users u ON s.user_id=u.user_id
+            WHERE s.status='confirmed'
+            ORDER BY s.created_at DESC LIMIT ?""", (limit,)).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_sahovat_amount(self, payment_id, new_amount):
+        self.conn.execute(
+            "UPDATE sahovat_payments SET amount=? WHERE id=?",
+            (new_amount, payment_id))
+        self.conn.commit()
+
     def get_weekly_sahovat_stats(self):
         """Haftalik (oxirgi 7 kun) statistika — type bo'yicha ajratilgan"""
         from datetime import datetime, timedelta
