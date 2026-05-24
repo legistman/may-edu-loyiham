@@ -361,24 +361,53 @@ async def sahovat_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]))
 
 async def sahovat_niyat_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Niyat tanlangandan keyin miqdor so'raladi"""
     q = update.callback_query; await q.answer()
     niyat = "guide" if "guide" in q.data else "ehson"
     context.user_data["sahovat_type"] = niyat
-    niyat_text = "📖 Qo'llanma uchun" if niyat == "guide" else "❤️ Faqat ehson"
-    foiz_text  = "50% xayriya / 50% qalam haqi" if niyat == "guide" else "100% xayriya"
-    await q.edit_message_text(
-        f"✅ Niyat: {niyat_text}\n"
-        f"💡 Taqsimot: {foiz_text}\n\n"
-        f"💰 Miqdorni tanlang:",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("5 000 so'm",  callback_data="sah_amt_5000"),
-             InlineKeyboardButton("10 000 so'm", callback_data="sah_amt_10000")],
-            [InlineKeyboardButton("20 000 so'm", callback_data="sah_amt_20000"),
-             InlineKeyboardButton("50 000 so'm", callback_data="sah_amt_50000")],
-            [InlineKeyboardButton("✏️ Boshqa miqdor", callback_data="sah_amt_custom")],
-            [back("sahovat_amount")],
-        ]))
+
+    if niyat == "guide":
+        await q.edit_message_text(
+            "📖 Qo'llanma uchun sahovat\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Siz to'lagan mablag' ikki qismga bo'linadi:\n\n"
+            "🏥 50% — Og'ir betob bolalar va mehribonlik\n"
+            "   uyiga to'liq ehson qilinadi\n\n"
+            "✍️ 50% — Tunlari uxlamay tayyorlangan\n"
+            "   qo'llanmaning qalam haqi bo'ladi\n\n"
+            "Shu tariqa siz ham ilm olib, ham savobga\n"
+            "sherik bo'lasiz. Har ikki niyat ham go'zal! 🌟\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "💰 Miqdorni tanlang:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("5 000 so'm",  callback_data="sah_amt_5000"),
+                 InlineKeyboardButton("10 000 so'm", callback_data="sah_amt_10000")],
+                [InlineKeyboardButton("20 000 so'm", callback_data="sah_amt_20000"),
+                 InlineKeyboardButton("50 000 so'm", callback_data="sah_amt_50000")],
+                [InlineKeyboardButton("✏️ Boshqa miqdor", callback_data="sah_amt_custom")],
+                [back("sahovat_amount")],
+            ]))
+    else:
+        await q.edit_message_text(
+            "❤️ Faqat ehson\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Siz to'lagan mablag'ning:\n\n"
+            "🏥 100% — Og'ir betob bolalar va mehribonlik\n"
+            "   uyiga to'liq ehson qilinadi\n\n"
+            "Bu sof niyat bilan qilingan sadaqa —\n"
+            "hech qanday manfaat kutmasdan!\n\n"
+            "Rasululloh ﷺ aytdilar:\n"
+            "«Sadaqa mol-mulkni kamaytirmaydi»\n"
+            "( Muslim, 2588 ) 🌙\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "💰 Miqdorni tanlang:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("5 000 so'm",  callback_data="sah_amt_5000"),
+                 InlineKeyboardButton("10 000 so'm", callback_data="sah_amt_10000")],
+                [InlineKeyboardButton("20 000 so'm", callback_data="sah_amt_20000"),
+                 InlineKeyboardButton("50 000 so'm", callback_data="sah_amt_50000")],
+                [InlineKeyboardButton("✏️ Boshqa miqdor", callback_data="sah_amt_custom")],
+                [back("sahovat_amount")],
+            ]))
 
 async def sahovat_amount_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
@@ -1469,26 +1498,105 @@ async def adm_rating_test_list(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def adm_sah_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
-    reports = db.get_sahovat_reports(5)
-    text = "📊 Sahovat hisobotlari\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    donors = db.get_confirmed_donors(30)
+
+    if not donors:
+        await q.edit_message_text(
+            "📊 Sahovat hisoboti\n━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            "Hozircha tasdiqlangan sahovat yo'q.",
+            reply_markup=InlineKeyboardMarkup([[back("adm_back")]]))
+        return
+
+    # Jami hisob
+    total = 0; ehson_sum = 0; guide_sum = 0
+    for d in donors:
+        try: val = int(str(d["amount"]).replace(" ","").replace(",",""))
+        except: val = 0
+        total += val
+        if d["payment_type"] == "ehson":
+            ehson_sum += val
+        else:
+            guide_sum += val
+
+    charity = ehson_sum + guide_sum // 2
+    author  = guide_sum - guide_sum // 2
+
+    def fmt(v): return f"{v:,}".replace(",", " ")
+
+    text = (
+        f"📊 Sahovat hisoboti\n━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💰 Jami: {fmt(total)} so'm\n"
+        f"🏥 Ehson uchun: {fmt(charity)} so'm\n"
+        f"✍️ Qalam haqi: {fmt(author)} so'm\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    )
+
     kb = []
-    if reports:
-        for r in reports:
-            text += (
-                f"#{r['id']} | 📅 {r['period']}\n"
-                f"💰 Jami to'langan: {r['total_sum']} so'm\n"
-                f"🏥 Ehson uchun: {r['charity_sum']} so'm\n"
-                f"✍️ Qalam haqi: {r['author_sum']} so'm\n"
-                f"👥 {r['donors_count']} kishi\n\n"
-            )
-            kb.append([InlineKeyboardButton(
-                f"🗑 #{r['id']} {r['period']} ni o'chirish",
-                callback_data=f"del_sah_report_{r['id']}")])
-    else:
-        text += "Hozircha hisobot yo'q.\n\n"
-    kb.append([InlineKeyboardButton("➕ Yangi hisobot qo'shish", callback_data="adm_add_sah_report")])
+    for d in donors:
+        name  = d.get("full_name") or d.get("first_name") or str(d["user_id"])
+        amt   = d["amount"] or "?"
+        ptype = "📖" if d["payment_type"] == "guide" else "❤️"
+        date  = str(d["created_at"])[:10]
+        kb.append([InlineKeyboardButton(
+            f"{ptype} {name} — {amt} so'm ({date})",
+            callback_data=f"sah_donor_{d['id']}")])
+
     kb.append([back("adm_back")])
-    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+    await q.edit_message_text(text + f"👥 Donorlar ({len(donors)} ta):",
+                              reply_markup=InlineKeyboardMarkup(kb))
+
+async def adm_sah_donor_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Donor tafsiloti + miqdorni tahrirlash"""
+    q = update.callback_query; await q.answer()
+    pay_id = int(q.data.split("_")[2])
+    row = db.conn.execute("""
+        SELECT s.*, u.first_name, u.full_name, u.username
+        FROM sahovat_payments s JOIN users u ON s.user_id=u.user_id
+        WHERE s.id=?""", (pay_id,)).fetchone()
+    if not row:
+        await q.answer("Topilmadi!", show_alert=True); return
+    row  = dict(row)
+    name = row.get("full_name") or row.get("first_name") or str(row["user_id"])
+    ptype = "📖 Qo'llanma uchun" if row["payment_type"] == "guide" else "❤️ Faqat ehson"
+    date  = str(row["created_at"])[:16]
+    try:
+        val     = int(str(row["amount"]).replace(" ","").replace(",",""))
+        if row["payment_type"] == "guide":
+            xayriya = f"{val//2:,}".replace(",", " ")
+            qalam   = f"{val - val//2:,}".replace(",", " ")
+            taqsim  = f"🏥 Ehson: {xayriya} so'm\n✍️ Qalam haqi: {qalam} so'm"
+        else:
+            taqsim = f"🏥 Ehson: {row['amount']} so'm (100%)"
+    except:
+        taqsim = "—"
+
+    await q.edit_message_text(
+        f"🧾 Donor tafsiloti\n━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"👤 {name}\n"
+        f"🆔 {row['user_id']}\n"
+        f"📛 @{row['username'] or 'yoq'}\n"
+        f"🎯 Niyat: {ptype}\n"
+        f"💰 Miqdor: {row['amount']} so'm\n"
+        f"📅 Sana: {date}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{taqsim}",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Miqdorni tahrirlash",
+                                 callback_data=f"sah_edit_donor_{pay_id}")],
+            [back("adm_sah_report")],
+        ]))
+
+async def sahovat_edit_donor_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin donor miqdorini tahrirlaydi (hisobot ichidan)"""
+    q = update.callback_query; await q.answer()
+    if not is_admin(q.from_user.id): return
+    pay_id = int(q.data.split("_")[3])
+    context.user_data["step"]        = "sah_donor_edit_amount"
+    context.user_data["edit_pay_id"] = pay_id
+    await context.bot.send_message(
+        q.from_user.id,
+        f"✏️ #{pay_id} donor uchun yangi miqdorni yozing (so'mda):\n\n"
+        f"Masalan: 20 000\n\nBekor: /admin")
 
 async def adm_add_sah_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
@@ -1642,8 +1750,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = context.user_data.get("step","")
     txt  = (update.message.text or "").strip()
 
-    # Admin sahovat miqdorini tahrirlash
-    if step == "sah_admin_edit_amount" and is_admin(uid):
+    # Admin donor miqdorini hisobotdan tahrirlash
+    if step == "sah_donor_edit_amount" and is_admin(uid):
+        pay_id = context.user_data.get("edit_pay_id")
+        context.user_data.clear()
+        db.update_sahovat_amount(pay_id, txt)
+        await update.message.reply_text(
+            f"✅ #{pay_id} donor miqdori {txt} so'm ga yangilandi!",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📊 Hisobotga qaytish", callback_data="adm_sah_report")],
+            ]))
+        return
         pay_id  = context.user_data.get("edit_pay_id")
         pay_uid = context.user_data.get("edit_pay_uid")
         msg_id  = context.user_data.get("edit_msg_id")
@@ -2149,8 +2266,10 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "adm_rating_all":   await adm_rating_all(update, context)
     elif data == "adm_rating_test":  await adm_rating_test_list(update, context)
     elif data == "adm_sahovat":      await adm_sahovat_payments(update, context)
-    elif data == "adm_sah_report":   await adm_sah_report(update, context)
-    elif data.startswith("sah_edit_"):       await sahovat_edit_amount(update, context)
+    elif data == "adm_sah_report":         await adm_sah_report(update, context)
+    elif data.startswith("sah_donor_edit_"):await sahovat_edit_donor_amount(update, context)
+    elif data.startswith("sah_donor_"):     await adm_sah_donor_detail(update, context)
+    elif data.startswith("sah_edit_"):      await sahovat_edit_amount(update, context)
     elif data.startswith("del_sah_report_"):
         if not is_admin(q.from_user.id): return
         rid = int(data.split("_")[-1])
