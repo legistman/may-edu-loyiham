@@ -7,333 +7,728 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;overflow:hidden;background:#0A0A0A;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif}
-.slides{width:100%;height:100vh;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch}
+
+/* ── GLOBAL FONT: SF Pro (system) ── */
+html,body{
+  height:100%;overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','Helvetica Neue',sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ── ANIMATED GRADIENT BACKGROUND (always visible) ── */
+body{
+  background:#0d0d1a;
+  position:relative;
+}
+#bg-canvas{
+  position:fixed;inset:0;z-index:0;
+  background:linear-gradient(160deg,#0b1e2d 0%,#0e1628 25%,#1a0e2e 50%,#2a0e1a 75%,#0e1e14 100%);
+}
+#bg-canvas::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 20%, rgba(30,90,180,0.55) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 70%, rgba(160,60,180,0.45) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 40% at 60% 30%, rgba(80,140,220,0.35) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 45% at 30% 80%, rgba(200,80,120,0.35) 0%, transparent 65%),
+    radial-gradient(ellipse 35% 35% at 70% 10%, rgba(100,200,160,0.25) 0%, transparent 60%);
+  animation:bgmove 12s ease-in-out infinite alternate;
+}
+@keyframes bgmove{
+  0%{filter:hue-rotate(0deg) brightness(1)}
+  100%{filter:hue-rotate(20deg) brightness(1.08)}
+}
+
+/* ── SLIDES ── */
+.slides{position:relative;z-index:1;width:100%;height:100vh;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch}
 .slides::-webkit-scrollbar{display:none}
 .slide{min-height:100vh;scroll-snap-align:start;position:relative;display:flex;flex-direction:column;overflow:hidden}
-.dots{position:fixed;right:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:100}
-.dot{width:5px;height:5px;border-radius:3px;background:rgba(255,255,255,0.2);transition:all 0.4s cubic-bezier(.34,1.56,.64,1)}
-.dot.active{height:22px;background:#7DFFCC}
 
-/* S1 HERO */
-.s1{background:linear-gradient(160deg,#021A12 0%,#0A3D2A 50%,#062B1C 100%)}
-.particles{position:absolute;inset:0;overflow:hidden}
-.particle{position:absolute;border-radius:50%;animation:float linear infinite}
-@keyframes float{0%{transform:translateY(100vh) rotate(0deg);opacity:0}10%{opacity:1}90%{opacity:1}100%{transform:translateY(-100px) rotate(720deg);opacity:0}}
-.s1-content{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 28px;text-align:center}
-.hero-ico{width:100px;height:100px;border-radius:30px;background:rgba(125,255,204,0.1);border:1px solid rgba(125,255,204,0.2);display:flex;align-items:center;justify-content:center;font-size:48px;margin:0 auto 24px;animation:glow 3s ease-in-out infinite}
-@keyframes glow{0%,100%{box-shadow:0 0 30px rgba(125,255,204,0.2)}50%{box-shadow:0 0 70px rgba(125,255,204,0.4),0 0 0 16px rgba(125,255,204,0.05)}}
-.hero-tag{background:rgba(125,255,204,0.08);border:1px solid rgba(125,255,204,0.2);border-radius:20px;padding:5px 14px;font-size:11px;color:rgba(125,255,204,0.8);font-weight:600;letter-spacing:0.08em;margin-bottom:16px;display:inline-block}
-.hero-title{font-size:34px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:12px;letter-spacing:-0.5px}
-.hero-title span{color:#7DFFCC}
-.hero-sub{font-size:14px;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:32px}
-.hero-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%}
-.hcard{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:14px 12px;text-align:center}
-.hcard-n{font-size:26px;font-weight:700;color:#7DFFCC}
-.hcard-l{font-size:10px;color:rgba(255,255,255,0.45);margin-top:3px;line-height:1.4}
-.hcard.full{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
-.hcard-full-t{font-size:13px;color:rgba(255,255,255,0.6);text-align:left}
-.hcard-full-v{font-size:20px;font-weight:700;color:#7DFFCC}
-.scroll-hint{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:5px;animation:bounce 2s infinite}
-@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(6px)}}
-.scroll-hint span{font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:0.07em}
-.scroll-hint svg{width:16px;height:16px;stroke:rgba(255,255,255,0.25);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* ── PROGRESS BAR ── */
+.gpb{position:fixed;top:0;left:0;height:2px;z-index:999;transition:width 0.4s ease;width:0%;
+  background:linear-gradient(90deg,rgba(255,255,255,0.9),rgba(255,255,255,0.4));
+  border-radius:0 1px 1px 0;
+}
 
-/* S2 NIMA UCHUN */
-.s2{background:#0A0A0A}
-.s2-head{padding:44px 24px 0;background:linear-gradient(180deg,#031A10 0%,transparent 100%)}
-.sec-lbl{font-size:11px;font-weight:600;letter-spacing:0.1em;margin-bottom:8px}
-.sec-lbl.green{color:#3DCCA0}
-.sec-lbl.gold{color:#FFD700}
-.sec-lbl.pink{color:#FF6B9D}
-.sec-lbl.teal{color:#4AC8E0}
-.sec-title{font-size:26px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:6px}
-.sec-sub{font-size:13px;color:#555;margin-bottom:20px}
-.why-list{padding:0 20px 32px;flex:1;display:flex;flex-direction:column;gap:10px}
-.why-card{background:#141414;border:1px solid rgba(255,255,255,0.06);border-radius:18px;padding:18px;display:flex;gap:14px;align-items:flex-start}
-.why-ico{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
-.why-ico.g{background:rgba(61,204,160,0.12);border:1px solid rgba(61,204,160,0.2)}
-.why-ico.w{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1)}
-.why-ico.p{background:rgba(255,107,157,0.1);border:1px solid rgba(255,107,157,0.2)}
-.why-ico.y{background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.2)}
-.why-info{flex:1}
-.why-t{font-size:14px;font-weight:600;color:#fff;margin-bottom:4px}
-.why-s{font-size:12px;color:#555;line-height:1.6}
-.why-tag{display:inline-block;font-size:10px;padding:2px 8px;border-radius:8px;font-weight:600;margin-top:6px}
-.why-tag.g{background:rgba(61,204,160,0.12);color:#3DCCA0}
-.why-tag.p{background:rgba(255,107,157,0.12);color:#FF6B9D}
-.why-tag.y{background:rgba(255,215,0,0.1);color:#FFD700}
+/* ── DOTS ── */
+.dots{position:fixed;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:5px;z-index:100}
+.dot{width:4px;height:4px;border-radius:2px;background:rgba(255,255,255,0.2);transition:all 0.45s cubic-bezier(.34,1.56,.64,1)}
+.dot.active{height:20px;background:rgba(255,255,255,0.75);box-shadow:0 0 6px rgba(255,255,255,0.4)}
 
-/* S3 NIYAT */
-.s3{background:#0A0A0A}
-.s3-head{padding:44px 24px 20px;background:linear-gradient(180deg,#1A0A00 0%,transparent 100%)}
-.niyat-cards{padding:0 20px;display:flex;flex-direction:column;gap:12px;flex:1}
-.niyat-card{background:#141414;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,0.06)}
-.nc-top{padding:18px;display:flex;align-items:center;gap:14px}
-.nc-ico{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
-.nc-ico.g{background:linear-gradient(135deg,rgba(61,204,160,0.15),rgba(61,204,160,0.25));border:1px solid rgba(61,204,160,0.2)}
-.nc-ico.p{background:linear-gradient(135deg,rgba(255,107,157,0.12),rgba(255,107,157,0.2));border:1px solid rgba(255,107,157,0.2)}
-.nc-t{font-size:15px;font-weight:600;color:#fff;margin-bottom:3px}
-.nc-s{font-size:12px;color:#555;line-height:1.5}
-.nc-div{height:1px;background:rgba(255,255,255,0.05);margin:0 18px}
-.nc-pills{padding:12px 18px;display:flex;gap:8px;flex-wrap:wrap}
-.nc-pill{font-size:11px;padding:4px 10px;border-radius:20px;font-weight:600}
-.nc-pill.g{background:rgba(61,204,160,0.1);color:#3DCCA0;border:1px solid rgba(61,204,160,0.2)}
-.nc-pill.p{background:rgba(255,107,157,0.1);color:#FF6B9D;border:1px solid rgba(255,107,157,0.2)}
-.nc-pill.gr{background:rgba(255,255,255,0.05);color:#555;border:1px solid rgba(255,255,255,0.08)}
-.hadis-box{margin:0 20px 24px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:14px 16px}
-.hadis-box p{font-size:12px;color:#555;line-height:1.7;font-style:italic}
-.hadis-box span{color:#3DCCA0;font-style:normal;font-weight:500}
+/* ── REVEAL ── */
+.reveal{opacity:0;transform:translateY(22px);transition:opacity 0.55s ease,transform 0.55s ease}
+.reveal.shown{opacity:1;transform:translateY(0)}
+.reveal-left{opacity:0;transform:translateX(-18px);transition:opacity 0.5s ease,transform 0.5s ease}
+.reveal-left.shown{opacity:1;transform:translateX(0)}
+.reveal-scale{opacity:0;transform:scale(0.88);transition:opacity 0.5s ease,transform 0.5s cubic-bezier(.34,1.56,.64,1)}
+.reveal-scale.shown{opacity:1;transform:scale(1)}
 
-/* S4 MIQDOR */
-.s4{background:#0A0A0A}
-.s4-head{padding:44px 24px 20px;background:linear-gradient(180deg,#0D1A0A 0%,transparent 100%)}
-.amt-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 20px 14px}
-.amt-btn{background:#141414;border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px 14px;text-align:center;cursor:pointer;transition:all 0.2s}
-.amt-btn.sel{background:rgba(61,204,160,0.08);border-color:rgba(61,204,160,0.4)}
-.amt-btn.sel .amt-n{color:#3DCCA0}
-.amt-n{font-size:20px;font-weight:700;color:#ccc;transition:color 0.2s}
-.amt-c{font-size:11px;color:#444;margin-top:3px}
-.custom-box{margin:0 20px 14px;background:#141414;border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:13px 16px;display:flex;align-items:center;gap:10px}
-.custom-box svg{width:16px;height:16px;stroke:#555;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
-.custom-box span{font-size:14px;color:#444}
-.split-box{margin:0 20px 14px;background:#141414;border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:16px}
-.split-lbl{font-size:10px;color:#444;font-weight:600;letter-spacing:0.06em;margin-bottom:12px}
-.split-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.split-row:last-child{margin-bottom:0}
-.split-k{font-size:13px;color:#666;display:flex;align-items:center;gap:6px}
-.split-v{font-size:13px;font-weight:600;color:#3DCCA0}
-.split-v.gray{color:#444}
-.split-bar{height:5px;background:#1E1E1E;border-radius:3px;margin-top:10px;overflow:hidden}
-.split-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#3DCCA0,#7DFFCC);transition:width 0.4s}
-.guide-amt .split-fill{width:50%}
-.ehson-amt .split-fill{width:100%;background:linear-gradient(90deg,#FF6B9D,#FF9CC0)}
+/* ──────────────────────────────────────
+   LIQUID GLASS COMPONENTS
+   iOS 26 style: thick blur + white tint
+   + specular top border + subtle shadow
+─────────────────────────────────────── */
+.lg-card{
+  background:rgba(255,255,255,0.11);
+  backdrop-filter:blur(40px) saturate(200%) brightness(1.1);
+  -webkit-backdrop-filter:blur(40px) saturate(200%) brightness(1.1);
+  border:1px solid rgba(255,255,255,0.22);
+  border-bottom-color:rgba(255,255,255,0.08);
+  border-radius:22px;
+  box-shadow:
+    0 2px 0 0 rgba(255,255,255,0.18) inset,
+    0 -1px 0 0 rgba(0,0,0,0.12) inset,
+    0 8px 32px rgba(0,0,0,0.28),
+    0 1px 0 rgba(255,255,255,0.06);
+}
+.lg-card-sm{
+  background:rgba(255,255,255,0.1);
+  backdrop-filter:blur(32px) saturate(180%) brightness(1.08);
+  -webkit-backdrop-filter:blur(32px) saturate(180%) brightness(1.08);
+  border:1px solid rgba(255,255,255,0.18);
+  border-bottom-color:rgba(255,255,255,0.07);
+  border-radius:18px;
+  box-shadow:
+    0 1.5px 0 0 rgba(255,255,255,0.15) inset,
+    0 6px 24px rgba(0,0,0,0.22);
+}
+.lg-tinted{
+  backdrop-filter:blur(36px) saturate(180%);
+  -webkit-backdrop-filter:blur(36px) saturate(180%);
+  border:1px solid rgba(255,255,255,0.18);
+  border-bottom-color:rgba(255,255,255,0.06);
+  border-radius:20px;
+  box-shadow:
+    0 2px 0 0 rgba(255,255,255,0.14) inset,
+    0 8px 28px rgba(0,0,0,0.25);
+}
 
-/* S5 KARTA */
-.s5{background:#0A0A0A}
-.s5-head{padding:44px 24px 20px}
-.bank-card{margin:0 20px 14px;border-radius:22px;padding:22px;position:relative;overflow:hidden;background:linear-gradient(135deg,#0A3D2A,#0F6E56,#1A8A6C)}
-.bc-glow{position:absolute;right:-30px;top:-30px;width:140px;height:140px;border-radius:50%;background:rgba(125,255,204,0.12)}
-.bc-glow2{position:absolute;left:-20px;bottom:-40px;width:100px;height:100px;border-radius:50%;background:rgba(0,0,0,0.15)}
-.bc-chip{width:30px;height:22px;background:rgba(255,255,255,0.2);border-radius:5px;margin-bottom:18px;position:relative;z-index:1}
-.bc-num{font-size:14px;color:#fff;letter-spacing:0.14em;font-weight:500;margin-bottom:16px;position:relative;z-index:1}
-.bc-foot{display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:1}
-.bc-own-l{font-size:9px;color:rgba(255,255,255,0.45);margin-bottom:2px}
-.bc-own{font-size:13px;color:rgba(255,255,255,0.85);font-weight:500}
-.bc-logo{font-size:11px;color:rgba(255,255,255,0.5);font-weight:600;letter-spacing:0.06em}
-.amount-pill{margin:0 20px 14px;background:rgba(61,204,160,0.06);border:1px solid rgba(61,204,160,0.15);border-radius:14px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
-.ap-l{font-size:13px;color:#555}
-.ap-v{font-size:22px;font-weight:700;color:#3DCCA0}
-.info-box{margin:0 20px 14px;background:#141414;border:1px solid rgba(255,215,0,0.12);border-radius:14px;padding:12px 14px;display:flex;gap:10px}
-.info-box svg{width:16px;height:16px;stroke:#FFD700;fill:none;stroke-width:2;flex-shrink:0;margin-top:1px}
-.info-box span{font-size:12px;color:#888;line-height:1.6}
-.proof-btn{margin:0 20px;background:linear-gradient(135deg,#0F6E56,#1A8A6C);border:none;border-radius:16px;width:calc(100% - 40px);padding:16px;font-size:15px;font-weight:600;color:#fff;box-shadow:0 8px 30px rgba(15,110,86,0.3);cursor:pointer}
+/* ──────────────────
+   S1  HERO
+────────────────── */
+.s1{justify-content:center;align-items:center;text-align:center;padding:0 20px}
 
-/* S6 HISOBOT */
-.s6{background:#0A0A0A}
-.s6-head{padding:44px 24px 20px;background:linear-gradient(180deg,#0A1020 0%,transparent 100%)}
-.report-summary{margin:0 20px 14px;background:linear-gradient(135deg,#0D1A2E,#162840);border:1px solid rgba(74,200,224,0.15);border-radius:20px;padding:18px}
-.rs-period{font-size:11px;color:rgba(74,200,224,0.6);font-weight:600;margin-bottom:12px;letter-spacing:0.06em}
-.rs-main{font-size:32px;font-weight:700;color:#fff;margin-bottom:4px}
-.rs-sub{font-size:12px;color:#555;margin-bottom:16px}
-.rs-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.rs-item{background:rgba(255,255,255,0.04);border-radius:12px;padding:10px 12px}
-.rs-item-n{font-size:18px;font-weight:700}
-.rs-item-n.teal{color:#4AC8E0}
-.rs-item-n.green{color:#3DCCA0}
-.rs-item-l{font-size:10px;color:#555;margin-top:2px}
-.donors-box{margin:0 20px 14px;background:#141414;border:1px solid rgba(255,255,255,0.06);border-radius:18px;overflow:hidden}
-.db-head{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center}
-.db-t{font-size:13px;font-weight:600;color:#fff}
-.db-cnt{font-size:11px;color:#555}
-.drow{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,0.04)}
-.drow:last-child{border-bottom:none}
-.dava{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
-.dava.g{background:rgba(61,204,160,0.15);color:#3DCCA0}
-.dava.p{background:rgba(255,107,157,0.12);color:#FF6B9D}
-.dname{font-size:13px;color:#ccc;flex:1}
-.dtype{font-size:10px;color:#555;margin-top:1px}
-.damt{font-size:13px;font-weight:600;color:#3DCCA0;white-space:nowrap}
-.ddate{font-size:10px;color:#444;margin-top:1px;text-align:right}
-.bar-box{margin:0 20px;background:#141414;border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:16px}
-.bar-lbl{font-size:10px;color:#444;font-weight:600;letter-spacing:0.06em;margin-bottom:12px}
-.bar-row{margin-bottom:10px}
-.bar-row:last-child{margin-bottom:0}
-.bar-top{display:flex;justify-content:space-between;margin-bottom:5px}
-.bar-k{font-size:12px;color:#666}
-.bar-v{font-size:12px;font-weight:600;color:#ccc}
-.bar-track{height:6px;background:#1E1E1E;border-radius:3px;overflow:hidden}
-.bar-fill{height:100%;border-radius:3px}
-.bar-fill.teal{background:linear-gradient(90deg,#3DCCA0,#7DFFCC)}
-.bar-fill.pink{background:linear-gradient(90deg,#FF6B9D,#FF9CC0)}
-.bar-fill.gray{background:#2A2A2A}
+.logo-wrap{position:relative;width:88px;height:88px;margin:0 auto 18px}
+.logo-ring{position:absolute;inset:-10px;border-radius:50%;border:1px solid rgba(255,255,255,0.15);animation:spin 18s linear infinite}
+.logo-ring2{position:absolute;inset:-5px;border-radius:50%;border:1px dashed rgba(255,255,255,0.08);animation:spin 11s linear infinite reverse}
+@keyframes spin{to{transform:rotate(360deg)}}
+.logo-box{
+  width:88px;height:88px;border-radius:26px;font-size:40px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,0.13);
+  backdrop-filter:blur(40px) saturate(200%);
+  -webkit-backdrop-filter:blur(40px) saturate(200%);
+  border:1px solid rgba(255,255,255,0.28);
+  border-bottom-color:rgba(255,255,255,0.1);
+  box-shadow:
+    0 2px 0 rgba(255,255,255,0.3) inset,
+    0 12px 40px rgba(0,0,0,0.35),
+    0 0 0 0.5px rgba(255,255,255,0.1);
+  animation:logopulse 4s ease-in-out infinite;
+}
+@keyframes logopulse{
+  0%,100%{box-shadow:0 2px 0 rgba(255,255,255,0.3) inset,0 12px 40px rgba(0,0,0,0.35)}
+  50%{box-shadow:0 2px 0 rgba(255,255,255,0.35) inset,0 12px 48px rgba(0,0,0,0.4),0 0 40px rgba(255,255,255,0.06)}
+}
 
-/* S7 CTA */
-.s7{background:linear-gradient(160deg,#021A12 0%,#041F15 40%,#0A0A0A 100%);justify-content:center;align-items:center;text-align:center;padding:40px 28px}
-.cta-rings{position:relative;width:100px;height:100px;margin:0 auto 28px}
-.cta-ring{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(125,255,204,0.15);animation:expand 3s ease-out infinite}
-.cta-ring:nth-child(2){animation-delay:1s}
-.cta-ring:nth-child(3){animation-delay:2s}
-@keyframes expand{0%{transform:scale(0.8);opacity:0.6}100%{transform:scale(1.8);opacity:0}}
-.cta-ico{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:40px}
-.cta-t{font-size:28px;font-weight:700;color:#fff;line-height:1.25;margin-bottom:12px}
-.cta-t span{color:#7DFFCC}
-.cta-s{font-size:14px;color:rgba(255,255,255,0.45);line-height:1.7;margin-bottom:32px}
-.cta-btn{background:linear-gradient(135deg,#0F6E56,#1A8A6C);border:none;border-radius:16px;padding:16px 32px;font-size:16px;font-weight:600;color:#fff;width:100%;margin-bottom:12px;box-shadow:0 8px 32px rgba(15,110,86,0.3);cursor:pointer}
-.cta-ghost{background:rgba(125,255,204,0.05);border:1px solid rgba(125,255,204,0.15);border-radius:16px;padding:14px 32px;font-size:14px;font-weight:500;color:rgba(125,255,204,0.6);width:100%;cursor:pointer;margin-bottom:24px}
-.cta-note{font-size:11px;color:rgba(255,255,255,0.2);line-height:1.7}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  background:rgba(255,255,255,0.1);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,0.2);
+  border-radius:20px;padding:5px 12px;margin-bottom:12px;
+  font-size:11px;font-weight:600;letter-spacing:0.05em;color:rgba(255,255,255,0.85);
+}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:#30d158;box-shadow:0 0 6px rgba(48,209,88,0.8);animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.25}}
+
+.hero-title{font-size:34px;font-weight:700;color:#fff;line-height:1.18;letter-spacing:-0.8px;margin-bottom:10px;text-shadow:0 1px 12px rgba(0,0,0,0.3)}
+.hero-title span{
+  background:linear-gradient(135deg,#ffffff,rgba(180,230,255,0.9));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{font-size:14px;font-weight:400;color:rgba(255,255,255,0.5);line-height:1.7;margin-bottom:22px;letter-spacing:-0.1px}
+
+.hero-cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:22px;width:100%}
+.hcard{
+  padding:14px 10px;text-align:center;
+  background:rgba(255,255,255,0.09);
+  backdrop-filter:blur(32px) saturate(180%);
+  -webkit-backdrop-filter:blur(32px) saturate(180%);
+  border:1px solid rgba(255,255,255,0.18);
+  border-bottom-color:rgba(255,255,255,0.07);
+  border-radius:18px;
+  box-shadow:0 2px 0 rgba(255,255,255,0.14) inset,0 4px 16px rgba(0,0,0,0.2);
+}
+.hcard.full{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:11px 16px}
+.hc-num{font-size:26px;font-weight:700;color:#fff;letter-spacing:-0.5px}
+.hc-lbl{font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;line-height:1.4;font-weight:400}
+.hc-fl{font-size:12px;color:rgba(255,255,255,0.4);font-weight:400}
+.hc-fv{font-size:14px;font-weight:600;color:#fff}
+
+.scroll-hint{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:4px;animation:shint 2.5s ease-in-out infinite}
+@keyframes shint{0%,100%{opacity:0.3;transform:translateX(-50%) translateY(0)}50%{opacity:0.8;transform:translateX(-50%) translateY(6px)}}
+.scroll-hint span{font-size:9px;color:rgba(255,255,255,0.3);letter-spacing:0.1em;font-weight:600}
+.scroll-hint svg{width:14px;height:9px;stroke:rgba(255,255,255,0.3);fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+
+/* ──────────────────
+   SHARED HEADER
+────────────────── */
+.sec-head{padding:52px 20px 16px;position:relative;z-index:1}
+.sec-label{
+  font-size:11px;font-weight:600;letter-spacing:0.1em;
+  color:rgba(255,255,255,0.45);
+  display:flex;align-items:center;gap:7px;margin-bottom:6px;
+  text-transform:uppercase;
+}
+.sec-label::before{content:'';display:block;width:14px;height:1px;background:rgba(255,255,255,0.3)}
+.sec-title{font-size:26px;font-weight:700;color:#fff;line-height:1.22;letter-spacing:-0.5px;text-shadow:0 1px 10px rgba(0,0,0,0.3)}
+.sec-sub{font-size:13px;color:rgba(255,255,255,0.35);margin-top:4px;font-weight:400}
+
+/* ──────────────────
+   S2  NIMA UCHUN
+────────────────── */
+.why-list{padding:2px 18px 28px;flex:1;display:flex;flex-direction:column;gap:8px;position:relative;z-index:1}
+.why-card{
+  padding:14px;display:flex;gap:12px;align-items:flex-start;
+  background:rgba(255,255,255,0.09);
+  backdrop-filter:blur(36px) saturate(180%) brightness(1.05);
+  -webkit-backdrop-filter:blur(36px) saturate(180%) brightness(1.05);
+  border:1px solid rgba(255,255,255,0.16);
+  border-bottom-color:rgba(255,255,255,0.06);
+  border-radius:20px;
+  box-shadow:0 2px 0 rgba(255,255,255,0.13) inset,0 4px 20px rgba(0,0,0,0.2);
+}
+.why-icon{
+  width:42px;height:42px;border-radius:13px;font-size:19px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  background:rgba(255,255,255,0.12);
+  border:1px solid rgba(255,255,255,0.2);
+  border-bottom-color:rgba(255,255,255,0.07);
+  box-shadow:0 1.5px 0 rgba(255,255,255,0.18) inset;
+}
+.why-name{font-size:14px;font-weight:600;color:rgba(255,255,255,0.92);margin-bottom:3px;letter-spacing:-0.2px}
+.why-desc{font-size:12px;color:rgba(255,255,255,0.38);line-height:1.6;font-weight:400}
+.why-tag{
+  display:inline-flex;align-items:center;margin-top:6px;
+  font-size:10px;font-weight:600;letter-spacing:0.04em;
+  padding:3px 9px;border-radius:10px;
+  background:rgba(255,255,255,0.1);
+  border:1px solid rgba(255,255,255,0.15);
+  color:rgba(255,255,255,0.65);
+}
+
+/* ──────────────────
+   S3  NIYAT
+────────────────── */
+.niyat-card{
+  margin:0 18px 10px;
+  background:rgba(255,255,255,0.1);
+  backdrop-filter:blur(40px) saturate(200%) brightness(1.08);
+  -webkit-backdrop-filter:blur(40px) saturate(200%) brightness(1.08);
+  border:1px solid rgba(255,255,255,0.2);
+  border-bottom-color:rgba(255,255,255,0.07);
+  border-radius:22px;overflow:hidden;
+  box-shadow:0 2px 0 rgba(255,255,255,0.16) inset,0 6px 24px rgba(0,0,0,0.22);
+}
+.niyat-top{padding:15px;display:flex;align-items:center;gap:13px}
+.niyat-icon{
+  width:48px;height:48px;border-radius:15px;font-size:22px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  background:rgba(255,255,255,0.12);
+  border:1px solid rgba(255,255,255,0.22);
+  box-shadow:0 1.5px 0 rgba(255,255,255,0.2) inset;
+}
+.niyat-name{font-size:15px;font-weight:600;color:#fff;margin-bottom:3px;letter-spacing:-0.2px}
+.niyat-desc{font-size:12px;color:rgba(255,255,255,0.38);line-height:1.5;font-weight:400}
+.niyat-div{height:1px;background:rgba(255,255,255,0.08);margin:0 15px}
+.niyat-pills{padding:10px 15px;display:flex;gap:7px;flex-wrap:wrap}
+.npill{
+  font-size:11px;font-weight:600;padding:4px 11px;border-radius:20px;
+  background:rgba(255,255,255,0.1);
+  border:1px solid rgba(255,255,255,0.18);
+  color:rgba(255,255,255,0.75);
+}
+.hadis-box{
+  margin:0 18px;padding:13px 15px;
+  background:rgba(255,255,255,0.06);
+  backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:16px;
+}
+.hadis-box p{font-size:12px;color:rgba(255,255,255,0.38);line-height:1.78;font-style:italic;font-weight:400}
+.hadis-box span{color:rgba(180,230,200,0.85);font-style:normal;font-weight:600}
+
+/* ──────────────────
+   S4  MIQDOR
+────────────────── */
+.amount-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 18px 10px;z-index:1;position:relative}
+.amount-btn{
+  padding:15px 10px;text-align:center;cursor:pointer;
+  background:rgba(255,255,255,0.09);
+  backdrop-filter:blur(32px) saturate(180%);
+  -webkit-backdrop-filter:blur(32px) saturate(180%);
+  border:1px solid rgba(255,255,255,0.16);
+  border-bottom-color:rgba(255,255,255,0.07);
+  border-radius:18px;
+  box-shadow:0 1.5px 0 rgba(255,255,255,0.13) inset,0 4px 14px rgba(0,0,0,0.18);
+  transition:all 0.2s;
+}
+.amount-btn.selected{
+  background:rgba(255,255,255,0.18);
+  border-color:rgba(255,255,255,0.38);
+  box-shadow:0 2px 0 rgba(255,255,255,0.25) inset,0 6px 20px rgba(0,0,0,0.25);
+  transform:scale(1.02);
+}
+.amount-btn:active{transform:scale(0.96)}
+.amt-num{font-size:18px;font-weight:700;color:rgba(255,255,255,0.75);letter-spacing:-0.3px;transition:color 0.2s}
+.amount-btn.selected .amt-num{color:#fff}
+.amt-lbl{font-size:10px;color:rgba(255,255,255,0.3);margin-top:2px;font-weight:500}
+
+.custom-input{
+  margin:0 18px 10px;
+  display:flex;align-items:center;gap:9px;padding:12px 14px;z-index:1;position:relative;
+  background:rgba(255,255,255,0.07);
+  backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
+  border:1px solid rgba(255,255,255,0.13);
+  border-radius:14px;
+  box-shadow:0 1.5px 0 rgba(255,255,255,0.1) inset;
+}
+.custom-input svg{width:15px;height:15px;stroke:rgba(255,255,255,0.25);fill:none;stroke-width:2;stroke-linecap:round;flex-shrink:0}
+.custom-input span{font-size:13px;color:rgba(255,255,255,0.22);font-weight:400}
+
+.split-box{
+  margin:0 18px 14px;padding:14px;z-index:1;position:relative;
+  background:rgba(255,255,255,0.07);
+  backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:18px;
+}
+.split-lbl{font-size:10px;color:rgba(255,255,255,0.3);font-weight:700;letter-spacing:0.07em;text-transform:uppercase;margin-bottom:10px}
+.split-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.split-row:last-of-type{margin-bottom:0}
+.split-key{font-size:13px;color:rgba(255,255,255,0.45);display:flex;align-items:center;gap:6px;font-weight:400}
+.split-val{font-size:13px;font-weight:600;color:rgba(255,255,255,0.85)}
+.split-bar{height:4px;background:rgba(255,255,255,0.08);border-radius:2px;margin-top:10px;overflow:hidden}
+.split-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,rgba(255,255,255,0.6),rgba(255,255,255,0.25))}
+
+/* ──────────────────
+   S5  KARTA
+────────────────── */
+.bank-card{
+  margin:6px 18px 13px;border-radius:24px;padding:22px;position:relative;overflow:hidden;z-index:1;
+  background:linear-gradient(135deg,rgba(20,40,80,0.7) 0%,rgba(40,20,70,0.65) 50%,rgba(80,20,50,0.6) 100%);
+  backdrop-filter:blur(40px) saturate(200%);
+  -webkit-backdrop-filter:blur(40px) saturate(200%);
+  border:1px solid rgba(255,255,255,0.2);
+  border-bottom-color:rgba(255,255,255,0.07);
+  box-shadow:
+    0 2px 0 rgba(255,255,255,0.2) inset,
+    0 16px 48px rgba(0,0,0,0.4),
+    0 0 0 0.5px rgba(255,255,255,0.08);
+}
+.bcard-shine{position:absolute;top:0;left:0;right:0;height:50%;background:linear-gradient(180deg,rgba(255,255,255,0.08),transparent);pointer-events:none}
+.chip{width:30px;height:22px;background:rgba(255,255,255,0.2);border-radius:5px;margin-bottom:18px;position:relative;z-index:1;border:1px solid rgba(255,255,255,0.15);box-shadow:0 1px 0 rgba(255,255,255,0.25) inset}
+.card-num{font-size:15px;color:rgba(255,255,255,0.9);letter-spacing:0.16em;font-weight:500;margin-bottom:16px;position:relative;z-index:1}
+.card-foot{display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:1}
+.card-owner-lbl{font-size:9px;color:rgba(255,255,255,0.35);margin-bottom:2px;letter-spacing:0.06em;text-transform:uppercase}
+.card-owner-name{font-size:13px;color:rgba(255,255,255,0.85);font-weight:500}
+.card-brand{font-size:11px;color:rgba(255,255,255,0.4);font-weight:600;letter-spacing:0.08em}
+
+.amount-pill{
+  margin:0 18px 12px;display:flex;justify-content:space-between;align-items:center;padding:13px 16px;z-index:1;position:relative;
+  background:rgba(255,255,255,0.09);
+  backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);
+  border:1px solid rgba(255,255,255,0.16);
+  border-radius:16px;
+  box-shadow:0 1.5px 0 rgba(255,255,255,0.13) inset;
+}
+.amount-pill-lbl{font-size:12px;color:rgba(255,255,255,0.4);font-weight:400}
+.amount-pill-val{font-size:22px;font-weight:700;color:#fff;letter-spacing:-0.4px}
+
+.info-box{
+  margin:0 18px 13px;display:flex;gap:9px;padding:11px 13px;z-index:1;position:relative;
+  background:rgba(255,255,255,0.06);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:14px;
+}
+.info-box svg{width:14px;height:14px;stroke:rgba(255,255,255,0.35);fill:none;stroke-width:2;flex-shrink:0;margin-top:1px}
+.info-box span{font-size:12px;color:rgba(255,255,255,0.38);line-height:1.62;font-weight:400}
+
+/* ── iOS STYLE BUTTON ── */
+.ios-btn{
+  margin:0 18px;width:calc(100% - 36px);padding:15px;
+  font-size:15px;font-weight:600;color:#fff;letter-spacing:-0.1px;
+  border:none;border-radius:16px;cursor:pointer;
+  background:rgba(255,255,255,0.18);
+  backdrop-filter:blur(32px) saturate(180%);
+  -webkit-backdrop-filter:blur(32px) saturate(180%);
+  border:1px solid rgba(255,255,255,0.28);
+  border-bottom-color:rgba(255,255,255,0.1);
+  box-shadow:0 2px 0 rgba(255,255,255,0.2) inset,0 8px 28px rgba(0,0,0,0.25);
+  transition:all 0.15s;position:relative;z-index:1;
+}
+.ios-btn:active{transform:scale(0.97);opacity:0.9}
+
+/* ──────────────────
+   S6  HISOBOT
+────────────────── */
+.report-sum{
+  margin:4px 18px 11px;padding:17px;z-index:1;position:relative;
+  background:rgba(255,255,255,0.09);
+  backdrop-filter:blur(40px) saturate(200%);
+  -webkit-backdrop-filter:blur(40px) saturate(200%);
+  border:1px solid rgba(255,255,255,0.18);
+  border-bottom-color:rgba(255,255,255,0.06);
+  border-radius:22px;
+  box-shadow:0 2px 0 rgba(255,255,255,0.14) inset,0 6px 24px rgba(0,0,0,0.2);
+}
+.report-period{font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;letter-spacing:0.07em;text-transform:uppercase;margin-bottom:8px}
+.report-total{font-size:30px;font-weight:700;color:#fff;margin-bottom:2px;letter-spacing:-0.8px}
+.report-sub{font-size:11px;color:rgba(255,255,255,0.28);margin-bottom:12px;font-weight:400}
+.report-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.report-item{
+  background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:12px;padding:10px 11px;
+}
+.report-num{font-size:17px;font-weight:700;color:#fff;letter-spacing:-0.3px}
+.report-item-lbl{font-size:10px;color:rgba(255,255,255,0.28);margin-top:2px;font-weight:400}
+
+.donors-box{
+  margin:0 18px 11px;overflow:hidden;z-index:1;position:relative;
+  background:rgba(255,255,255,0.08);
+  backdrop-filter:blur(36px) saturate(180%);
+  -webkit-backdrop-filter:blur(36px) saturate(180%);
+  border:1px solid rgba(255,255,255,0.14);
+  border-radius:20px;
+  box-shadow:0 1.5px 0 rgba(255,255,255,0.12) inset;
+}
+.donors-head{padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center}
+.donors-title{font-size:12px;font-weight:600;color:rgba(255,255,255,0.72)}
+.donors-count{font-size:11px;color:rgba(255,255,255,0.28);font-weight:400}
+.donor-row{display:flex;align-items:center;gap:9px;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.05)}
+.donor-row:last-child{border-bottom:none}
+.donor-av{
+  width:30px;height:30px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:700;
+  background:rgba(255,255,255,0.12);
+  border:1px solid rgba(255,255,255,0.18);
+  color:rgba(255,255,255,0.8);
+}
+.donor-name{font-size:12px;color:rgba(255,255,255,0.75);font-weight:500}
+.donor-type{font-size:10px;color:rgba(255,255,255,0.25);margin-top:1px;font-weight:400}
+.donor-amt{font-size:12px;font-weight:600;color:rgba(255,255,255,0.85)}
+.donor-date{font-size:10px;color:rgba(255,255,255,0.22);text-align:right;margin-top:1px;font-weight:400}
+.donors-more{padding:9px 14px;text-align:center;font-size:11px;color:rgba(255,255,255,0.45);font-weight:600;letter-spacing:0.03em}
+
+.breakdown-box{
+  margin:0 18px;padding:14px;z-index:1;position:relative;
+  background:rgba(255,255,255,0.07);
+  backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:18px;
+}
+.breakdown-lbl{font-size:10px;color:rgba(255,255,255,0.28);font-weight:700;letter-spacing:0.07em;text-transform:uppercase;margin-bottom:10px}
+.breakdown-row{margin-bottom:9px}
+.breakdown-row:last-child{margin-bottom:0}
+.breakdown-top{display:flex;justify-content:space-between;margin-bottom:5px}
+.breakdown-key{font-size:12px;color:rgba(255,255,255,0.38);font-weight:400}
+.breakdown-val{font-size:12px;font-weight:600;color:rgba(255,255,255,0.65)}
+.btrack{height:4px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden}
+.bfill{height:100%;border-radius:2px;background:rgba(255,255,255,0.4)}
+
+/* ──────────────────
+   S7  CTA
+────────────────── */
+.s7{justify-content:center;align-items:center;text-align:center;padding:36px 22px}
+
+.cta-rings{position:relative;width:88px;height:88px;margin:0 auto 22px;z-index:2}
+.cr{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(255,255,255,0.1);animation:exp 3.2s ease-out infinite}
+.cr:nth-child(2){animation-delay:1.06s}
+.cr:nth-child(3){animation-delay:2.13s}
+@keyframes exp{0%{transform:scale(1);opacity:0.5}100%{transform:scale(2.5);opacity:0}}
+.cta-icon{
+  position:absolute;inset:0;border-radius:26px;font-size:38px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,0.13);
+  backdrop-filter:blur(40px) saturate(200%);
+  -webkit-backdrop-filter:blur(40px) saturate(200%);
+  border:1px solid rgba(255,255,255,0.28);
+  border-bottom-color:rgba(255,255,255,0.1);
+  box-shadow:0 2px 0 rgba(255,255,255,0.25) inset,0 8px 32px rgba(0,0,0,0.3);
+}
+
+.cta-title{position:relative;z-index:2;font-size:30px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:10px;letter-spacing:-0.7px}
+.cta-title span{
+  background:linear-gradient(135deg,#fff,rgba(180,220,255,0.9));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.cta-sub{position:relative;z-index:2;font-size:14px;color:rgba(255,255,255,0.38);line-height:1.75;margin-bottom:26px;font-weight:400}
+
+.cta-btn{
+  position:relative;z-index:2;width:100%;margin-bottom:10px;
+  padding:16px;font-size:15px;font-weight:600;color:#fff;letter-spacing:-0.1px;
+  border:none;border-radius:18px;cursor:pointer;
+  background:rgba(255,255,255,0.18);
+  backdrop-filter:blur(36px) saturate(180%);
+  -webkit-backdrop-filter:blur(36px) saturate(180%);
+  border:1px solid rgba(255,255,255,0.28);
+  border-bottom-color:rgba(255,255,255,0.1);
+  box-shadow:0 2px 0 rgba(255,255,255,0.22) inset,0 10px 32px rgba(0,0,0,0.25);
+  transition:all 0.15s;
+}
+.cta-btn:active{transform:scale(0.97)}
+
+.cta-ghost{
+  position:relative;z-index:2;width:100%;margin-bottom:20px;
+  padding:14px;font-size:13px;font-weight:500;
+  color:rgba(255,255,255,0.55);letter-spacing:-0.1px;
+  border:none;border-radius:16px;cursor:pointer;
+  background:rgba(255,255,255,0.07);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,0.12);
+  transition:all 0.15s;
+}
+.cta-note{position:relative;z-index:2;font-size:10px;color:rgba(255,255,255,0.18);line-height:1.9;font-weight:400;letter-spacing:0.01em}
 </style>
 </head>
 <body>
+<div id="bg-canvas"></div>
 <script>if(window.Telegram&&window.Telegram.WebApp){Telegram.WebApp.ready();Telegram.WebApp.expand();}</script>
+<div class="gpb" id="gpb"></div>
 <div class="dots" id="dots"></div>
 <div class="slides">
 
-<!-- S1: HERO -->
+<!-- S1 HERO -->
 <div class="slide s1">
-  <div class="particles" id="particles"></div>
-  <div class="s1-content">
-    <div class="hero-tag">Legistman · Sahovat tizimi</div>
-    <div class="hero-ico">🤲</div>
-    <h1 class="hero-title">Ezgu amal —<br><span>savobga sherik</span><br>bo'ling</h1>
-    <p class="hero-sub">Har bir to'lov ikkiga bo'linadi:<br>ilm olish va yaxshilik qilish</p>
-    <div class="hero-cards">
-      <div class="hcard"><div class="hcard-n">50%</div><div class="hcard-l">Og'ir betob bolalar va mehribonlik uyi</div></div>
-      <div class="hcard"><div class="hcard-n">50%</div><div class="hcard-l">Qo'llanma qalam haqi (muallif)</div></div>
-      <div class="hcard full"><div class="hcard-full-t">Hech qanday qat'iy narx yo'q</div><div class="hcard-full-v">O'zingiz belgilaysiz</div></div>
+  <div class="s1-c" id="hc" style="position:relative;z-index:2;width:100%">
+    <div class="logo-wrap reveal-scale">
+      <div class="logo-ring"></div><div class="logo-ring2"></div>
+      <div class="logo-box">🤲</div>
+    </div>
+    <div class="hero-badge reveal" style="transition-delay:0.1s">
+      <div class="badge-dot"></div>Legistman · Sahovat tizimi
+    </div>
+    <h1 class="hero-title reveal" style="transition-delay:0.2s">Ezgu amal —<br><span>savobga sherik</span><br>bo'ling</h1>
+    <p class="hero-sub reveal" style="transition-delay:0.3s">Har bir to'lov ikki xayrli ishga aylanadi:<br>ilm olish va yaxshilik qilish</p>
+    <div class="hero-cards reveal" style="transition-delay:0.4s">
+      <div class="hcard"><div class="hc-num">50%</div><div class="hc-lbl">Og'ir betob bolalar va mehribonlik uyi</div></div>
+      <div class="hcard"><div class="hc-num">50%</div><div class="hc-lbl">Qo'llanma qalam haqi (muallif)</div></div>
+      <div class="hcard full"><div class="hc-fl">Qat'iy narx yo'q</div><div class="hc-fv">O'zingiz belgilaysiz</div></div>
     </div>
   </div>
-  <div class="scroll-hint"><span>PASTGA SURING</span><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
+  <div class="scroll-hint">
+    <span>PASTGA SURING</span>
+    <svg viewBox="0 0 24 10"><polyline points="4 2 12 8 20 2"/></svg>
+  </div>
 </div>
 
-<!-- S2: NIMA UCHUN -->
+<!-- S2 NIMA UCHUN -->
 <div class="slide s2">
-  <div class="s2-head">
-    <div class="sec-lbl green">NIMA UCHUN SAHOVAT?</div>
-    <div class="sec-title">Bu shunchaki to'lov<br>emas...</div>
-    <div class="sec-sub">Har bir tiyindа katta ma'no bor</div>
+  <div class="sec-head">
+    <div class="sec-label reveal-left">NIMA UCHUN SAHOVAT?</div>
+    <div class="sec-title reveal" style="transition-delay:0.1s">Bu shunchaki to'lov<br>emas...</div>
+    <div class="sec-sub reveal" style="transition-delay:0.15s">Har bir tiyinda katta ma'no bor</div>
   </div>
   <div class="why-list">
-    <div class="why-card"><div class="why-ico g">❤️</div><div class="why-info"><div class="why-t">Birovning hayotiga nur</div><div class="why-s">Og'ir betob bolalar va mehribonlik uyidagilarga bevosita yordam</div><div class="why-tag g">50% — Xayriya</div></div></div>
-    <div class="why-card"><div class="why-ico w">📖</div><div class="why-info"><div class="why-t">Ilm oling, savob qiling</div><div class="why-s">Sifatli qo'llanma olish bilan birga ezgu ishga sababchi bo'ling</div><div class="why-tag g">Ikki xayrli ish bir vaqtda</div></div></div>
-    <div class="why-card"><div class="why-ico p">🤍</div><div class="why-info"><div class="why-t">Faqat ehson ham bo'ladi</div><div class="why-s">Qo'llanmasiz, sof niyat bilan — 100% to'liq xayriya bo'ladi</div><div class="why-tag p">100% — Xayriya</div></div></div>
-    <div class="why-card"><div class="why-ico y">📊</div><div class="why-info"><div class="why-t">Har hafta hisobot</div><div class="why-s">Pulingiz qayerga ketgani — har juma kanalda ochiq ko'rsatiladi</div><div class="why-tag y">Shaffof tizim</div></div></div>
+    <div class="why-card reveal" style="transition-delay:0.2s">
+      <div class="why-icon">❤️</div>
+      <div><div class="why-name">Birovning hayotiga nur</div><div class="why-desc">Og'ir betob bolalar va mehribonlik uyidagilarga bevosita yordam</div><span class="why-tag">50% — Xayriya</span></div>
+    </div>
+    <div class="why-card reveal" style="transition-delay:0.25s">
+      <div class="why-icon">📖</div>
+      <div><div class="why-name">Ilm oling, savob qiling</div><div class="why-desc">Sifatli qo'llanma olish bilan birga ezgu ishga sababchi bo'ling</div><span class="why-tag">Bir vaqtda ikki xayrli ish</span></div>
+    </div>
+    <div class="why-card reveal" style="transition-delay:0.3s">
+      <div class="why-icon">🤍</div>
+      <div><div class="why-name">Faqat ehson ham bo'ladi</div><div class="why-desc">Qo'llanmasiz, sof niyat bilan — 100% to'liq xayriya bo'ladi</div><span class="why-tag">100% — Xayriya</span></div>
+    </div>
+    <div class="why-card reveal" style="transition-delay:0.35s">
+      <div class="why-icon">📊</div>
+      <div><div class="why-name">Har hafta hisobot</div><div class="why-desc">Pulingiz qayerga ketgani — har juma kanalda ochiq ko'rsatiladi</div><span class="why-tag">Shaffof tizim</span></div>
+    </div>
   </div>
 </div>
 
-<!-- S3: NIYAT -->
+<!-- S3 NIYAT -->
 <div class="slide s3">
-  <div class="s3-head">
-    <div class="sec-lbl gold">NIYAT TANLASH</div>
-    <div class="sec-title">Qanday niyat bilan<br>sahovat qilasiz?</div>
-    <div class="sec-sub">Pul taqsimoti bunga qarab aniqlanadi</div>
+  <div class="sec-head">
+    <div class="sec-label reveal-left">NIYAT TANLASH</div>
+    <div class="sec-title reveal" style="transition-delay:0.1s">Qanday niyat bilan<br>sahovat qilasiz?</div>
+    <div class="sec-sub reveal" style="transition-delay:0.15s">Pul taqsimoti bunga qarab aniqlanadi</div>
   </div>
-  <div class="niyat-cards">
-    <div class="niyat-card">
-      <div class="nc-top"><div class="nc-ico g">📖</div><div><div class="nc-t">Qo'llanma uchun</div><div class="nc-s">Qo'llanma olib, savobga sherik bo'lish</div></div></div>
-      <div class="nc-div"></div>
-      <div class="nc-pills"><span class="nc-pill g">50% — Ehson</span><span class="nc-pill gr">50% — Qalam haqi</span></div>
+  <div class="niyat-card reveal" style="transition-delay:0.2s">
+    <div class="niyat-top">
+      <div class="niyat-icon">📖</div>
+      <div><div class="niyat-name">Qo'llanma uchun</div><div class="niyat-desc">Qo'llanma olib, savobga sherik bo'lish</div></div>
     </div>
-    <div class="niyat-card">
-      <div class="nc-top"><div class="nc-ico p">❤️</div><div><div class="nc-t">Faqat ehson</div><div class="nc-s">Sof niyat — hech qanday manfaat kutmasdan</div></div></div>
-      <div class="nc-div"></div>
-      <div class="nc-pills"><span class="nc-pill p">100% — To'liq ehson</span></div>
-    </div>
+    <div class="niyat-div"></div>
+    <div class="niyat-pills"><span class="npill">50% — Ehson</span><span class="npill">50% — Qalam haqi</span></div>
   </div>
-  <div class="hadis-box"><p>"Sadaqa mol-mulkni kamaytirmaydi" — <span>Muslim, 2588</span><br><br>Miqdor emas, niyat muhim. Ba'zan kichkina yaxshilik ham Alloh oldida juda katta amal bo'lishi mumkin.</p></div>
+  <div class="niyat-card reveal" style="transition-delay:0.25s">
+    <div class="niyat-top">
+      <div class="niyat-icon">❤️</div>
+      <div><div class="niyat-name">Faqat ehson</div><div class="niyat-desc">Sof niyat — hech qanday manfaat kutmasdan</div></div>
+    </div>
+    <div class="niyat-div"></div>
+    <div class="niyat-pills"><span class="npill">100% — To'liq ehson</span></div>
+  </div>
+  <div class="hadis-box reveal" style="transition-delay:0.3s">
+    <p>"Sadaqa mol-mulkni kamaytirmaydi" — <span>Muslim, 2588</span><br><br>Miqdor emas, niyat muhim. Ba'zan kichkina yaxshilik ham Alloh oldida juda katta amal bo'lishi mumkin.</p>
+  </div>
 </div>
 
-<!-- S4: MIQDOR -->
+<!-- S4 MIQDOR -->
 <div class="slide s4">
-  <div class="s4-head">
-    <div class="sec-lbl teal">MIQDOR TANLASH</div>
-    <div class="sec-title">Istalgan miqdor —<br>o'zingiz belgilaysiz</div>
+  <div class="sec-head">
+    <div class="sec-label reveal-left">MIQDOR</div>
+    <div class="sec-title reveal" style="transition-delay:0.1s">Istalgan miqdor —<br>o'zingiz belgilaysiz</div>
   </div>
-  <div class="amt-grid">
-    <div class="amt-btn"><div class="amt-n">5 000</div><div class="amt-c">so'm</div></div>
-    <div class="amt-btn"><div class="amt-n">10 000</div><div class="amt-c">so'm</div></div>
-    <div class="amt-btn sel"><div class="amt-n">20 000</div><div class="amt-c">so'm</div></div>
-    <div class="amt-btn"><div class="amt-n">50 000</div><div class="amt-c">so'm</div></div>
+  <div class="amount-grid">
+    <div class="amount-btn reveal" style="transition-delay:0.15s"><div class="amt-num">5 000</div><div class="amt-lbl">so'm</div></div>
+    <div class="amount-btn reveal" style="transition-delay:0.18s"><div class="amt-num">10 000</div><div class="amt-lbl">so'm</div></div>
+    <div class="amount-btn selected reveal" style="transition-delay:0.21s"><div class="amt-num">20 000</div><div class="amt-lbl">so'm</div></div>
+    <div class="amount-btn reveal" style="transition-delay:0.24s"><div class="amt-num">50 000</div><div class="amt-lbl">so'm</div></div>
   </div>
-  <div class="custom-box"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Boshqa miqdor yozing...</span></div>
-  <div class="split-box guide-amt">
-    <div class="split-lbl">TAQSIMOT (20 000 so'm)</div>
-    <div class="split-row"><div class="split-k">🏥 Ehson</div><div class="split-v">10 000 so'm</div></div>
-    <div class="split-row"><div class="split-k">✍️ Qalam haqi</div><div class="split-v">10 000 so'm</div></div>
+  <div class="custom-input reveal" style="transition-delay:0.28s">
+    <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    <span>Boshqa miqdor yozing...</span>
+  </div>
+  <div class="split-box reveal" style="transition-delay:0.32s">
+    <div class="split-lbl">TAQSIMOT (20 000 so'm uchun)</div>
+    <div class="split-row"><div class="split-key">🏥 Ehson</div><div class="split-val">10 000 so'm</div></div>
+    <div class="split-row"><div class="split-key">✍️ Qalam haqi</div><div class="split-val">10 000 so'm</div></div>
     <div class="split-bar"><div class="split-fill" style="width:50%"></div></div>
   </div>
 </div>
 
-<!-- S5: KARTA -->
+<!-- S5 KARTA -->
 <div class="slide s5">
-  <div class="s5-head">
-    <div class="sec-lbl green">TO'LOV</div>
-    <div class="sec-title">Kartaga o'tkazing,<br>chekni yuboring</div>
+  <div class="sec-head">
+    <div class="sec-label reveal-left">TO'LOV</div>
+    <div class="sec-title reveal" style="transition-delay:0.1s">Kartaga o'tkazing,<br>chekni yuboring</div>
   </div>
-  <div class="bank-card">
-    <div class="bc-glow"></div><div class="bc-glow2"></div>
-    <div class="bc-chip"></div>
-    <div class="bc-num">9860 3501 4876 2387</div>
-    <div class="bc-foot">
-      <div><div class="bc-own-l">KARTA EGASI</div><div class="bc-own">Mallayev Ozodbek</div></div>
-      <div class="bc-logo">LEGISTMAN</div>
+  <div class="bank-card reveal-scale" style="transition-delay:0.2s">
+    <div class="bcard-shine"></div>
+    <div class="chip"></div>
+    <div class="card-num">9860 3501 4876 2387</div>
+    <div class="card-foot">
+      <div><div class="card-owner-lbl">KARTA EGASI</div><div class="card-owner-name">Mallayev Ozodbek</div></div>
+      <div class="card-brand">LEGISTMAN</div>
     </div>
   </div>
-  <div class="amount-pill"><div class="ap-l">To'lov miqdori</div><div class="ap-v">20 000 so'm</div></div>
-  <div class="info-box"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Karta raqamini nusxalab bank ilovangiz orqali o'tkazing. O'tkazgach chek screenshot ini yuboring.</span></div>
-  <div style="height:14px"></div>
-  <button class="proof-btn">📸 Chekni yuborish</button>
+  <div class="amount-pill reveal" style="transition-delay:0.3s">
+    <div class="amount-pill-lbl">To'lov miqdori</div>
+    <div class="amount-pill-val">20 000 so'm</div>
+  </div>
+  <div class="info-box reveal" style="transition-delay:0.35s">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span>Karta raqamini nusxalab bank ilovangiz orqali o'tkazing. O'tkazgach chek screenshotini yuboring.</span>
+  </div>
+  <button class="ios-btn reveal" style="transition-delay:0.4s">📸 Chekni yuborish</button>
 </div>
 
-<!-- S6: HISOBOT -->
+<!-- S6 HISOBOT -->
 <div class="slide s6">
-  <div class="s6-head">
-    <div class="sec-lbl teal">HAFTALIK HISOBOT</div>
-    <div class="sec-title">Pul qayerga ketdi?<br>Ochiq ko'rsatamiz</div>
+  <div class="sec-head">
+    <div class="sec-label reveal-left">HAFTALIK HISOBOT</div>
+    <div class="sec-title reveal" style="transition-delay:0.1s">Pul qayerga ketdi?<br>Ochiq ko'rsatamiz</div>
   </div>
-  <div class="report-summary">
-    <div class="rs-period">19.05 — 25.05.2026 · HAFTALİK</div>
-    <div class="rs-main">185 000 so'm</div>
-    <div class="rs-sub">Jami yig'ilgan sahovat</div>
-    <div class="rs-grid">
-      <div class="rs-item"><div class="rs-item-n teal">112 500</div><div class="rs-item-l">Ehson (so'm)</div></div>
-      <div class="rs-item"><div class="rs-item-n green">72 500</div><div class="rs-item-l">Qalam haqi (so'm)</div></div>
+  <div class="report-sum reveal" style="transition-delay:0.2s">
+    <div class="report-period">19.05 — 25.05.2026 · HAFTALIK</div>
+    <div class="report-total" id="rc1">0 so'm</div>
+    <div class="report-sub">Jami yig'ilgan sahovat</div>
+    <div class="report-grid">
+      <div class="report-item"><div class="report-num" id="rc2">0</div><div class="report-item-lbl">Ehson (so'm)</div></div>
+      <div class="report-item"><div class="report-num" id="rc3">0</div><div class="report-item-lbl">Qalam haqi (so'm)</div></div>
     </div>
   </div>
-  <div class="donors-box">
-    <div class="db-head"><div class="db-t">Donorlar</div><div class="db-cnt">8 kishi</div></div>
-    <div class="drow"><div class="dava g">AM</div><div style="flex:1"><div class="dname">Akbar Mirzayev</div><div class="dtype">📖 Qo'llanma uchun</div></div><div style="text-align:right"><div class="damt">50 000</div><div class="ddate">24.05</div></div></div>
-    <div class="drow"><div class="dava p">ZR</div><div style="flex:1"><div class="dname">Zulfiya Rahimova</div><div class="dtype">❤️ Faqat ehson</div></div><div style="text-align:right"><div class="damt">30 000</div><div class="ddate">24.05</div></div></div>
-    <div class="drow"><div class="dava g">SK</div><div style="flex:1"><div class="dname">Sardor Karimov</div><div class="dtype">📖 Qo'llanma uchun</div></div><div style="text-align:right"><div class="damt">20 000</div><div class="ddate">23.05</div></div></div>
-    <div class="drow"><div class="dava p">NH</div><div style="flex:1"><div class="dname">Nodira Hasanova</div><div class="dtype">❤️ Faqat ehson</div></div><div style="text-align:right"><div class="damt">15 000</div><div class="ddate">23.05</div></div></div>
-    <div style="padding:10px 16px;text-align:center;font-size:12px;color:#3DCCA0;font-weight:500">+ 4 ta donor ko'rish</div>
+  <div class="donors-box reveal" style="transition-delay:0.3s">
+    <div class="donors-head"><div class="donors-title">Donorlar</div><div class="donors-count">8 kishi</div></div>
+    <div class="donor-row"><div class="donor-av">AM</div><div style="flex:1"><div class="donor-name">Akbar Mirzayev</div><div class="donor-type">📖 Qo'llanma uchun</div></div><div style="text-align:right"><div class="donor-amt">50 000</div><div class="donor-date">24.05</div></div></div>
+    <div class="donor-row"><div class="donor-av">ZR</div><div style="flex:1"><div class="donor-name">Zulfiya Rahimova</div><div class="donor-type">❤️ Faqat ehson</div></div><div style="text-align:right"><div class="donor-amt">30 000</div><div class="donor-date">24.05</div></div></div>
+    <div class="donor-row"><div class="donor-av">SK</div><div style="flex:1"><div class="donor-name">Sardor Karimov</div><div class="donor-type">📖 Qo'llanma uchun</div></div><div style="text-align:right"><div class="donor-amt">20 000</div><div class="donor-date">23.05</div></div></div>
+    <div class="donor-row"><div class="donor-av">NH</div><div style="flex:1"><div class="donor-name">Nodira Hasanova</div><div class="donor-type">❤️ Faqat ehson</div></div><div style="text-align:right"><div class="donor-amt">15 000</div><div class="donor-date">23.05</div></div></div>
+    <div class="donors-more">+ 4 ta donor ko'rish</div>
   </div>
-  <div class="bar-box">
-    <div class="bar-lbl">NIYAT BO'YICHA TAQSIMOT</div>
-    <div class="bar-row"><div class="bar-top"><div class="bar-k">📖 Qo'llanma uchun (5 kishi)</div><div class="bar-v">110 000</div></div><div class="bar-track"><div class="bar-fill teal" style="width:60%"></div></div></div>
-    <div class="bar-row"><div class="bar-top"><div class="bar-k">❤️ Faqat ehson (3 kishi)</div><div class="bar-v">75 000</div></div><div class="bar-track"><div class="bar-fill pink" style="width:40%"></div></div></div>
+  <div class="breakdown-box reveal" style="transition-delay:0.4s">
+    <div class="breakdown-lbl">NIYAT BO'YICHA</div>
+    <div class="breakdown-row"><div class="breakdown-top"><div class="breakdown-key">📖 Qo'llanma uchun (5 kishi)</div><div class="breakdown-val">110 000</div></div><div class="btrack"><div class="bfill" style="width:60%"></div></div></div>
+    <div class="breakdown-row"><div class="breakdown-top"><div class="breakdown-key">❤️ Faqat ehson (3 kishi)</div><div class="breakdown-val">75 000</div></div><div class="btrack"><div class="bfill" style="width:40%;background:rgba(255,255,255,0.25)"></div></div></div>
   </div>
 </div>
 
-<!-- S7: CTA -->
+<!-- S7 CTA -->
 <div class="slide s7">
-  <div class="cta-rings"><div class="cta-ring"></div><div class="cta-ring"></div><div class="cta-ring"></div><div class="cta-ico">🤲</div></div>
-  <div class="cta-t">Yaxshilikka<br><span>sababchi</span><br>bo'lasizmi?</div>
-  <p class="cta-s">Kichkina yaxshilik ham Alloh oldida<br>katta amal bo'lishi mumkin.<br>Niyat qiling, sahovat qiling.</p>
-  <button class="cta-btn" onclick="if(window.Telegram&&window.Telegram.WebApp)Telegram.WebApp.close()">🤲 Sahovat qilish</button>
-  <button class="cta-ghost" onclick="if(window.Telegram&&window.Telegram.WebApp)Telegram.WebApp.close()">📊 Hisobotni ko'rish</button>
-  <div class="cta-note">Har juma kanalda hisobot chop etiladi<br>@legistman · @legistman_bot</div>
+  <div class="cta-rings reveal-scale">
+    <div class="cr"></div><div class="cr"></div><div class="cr"></div>
+    <div class="cta-icon">🤲</div>
+  </div>
+  <div class="cta-title reveal" style="transition-delay:0.15s">Yaxshilikka<br><span>sababchi</span><br>bo'lasizmi?</div>
+  <p class="cta-sub reveal" style="transition-delay:0.25s">Kichkina yaxshilik ham Alloh oldida<br>katta amal bo'lishi mumkin.<br>Niyat qiling, sahovat qiling.</p>
+  <button class="cta-btn reveal" style="transition-delay:0.35s" onclick="ctg()">🤲 Sahovat qilish</button>
+  <button class="cta-ghost reveal" style="transition-delay:0.4s" onclick="ctg()">📊 Hisobotni ko'rish</button>
+  <div class="cta-note reveal" style="transition-delay:0.45s">Har juma kanalda hisobot chop etiladi<br>@legistman · @legistman_bot</div>
 </div>
 
 </div>
 <script>
-var pc=document.getElementById('particles');
-for(var i=0;i<14;i++){var p=document.createElement('div');p.className='particle';var s=Math.random()*5+2;var colors=['rgba(125,255,204,0.25)','rgba(61,204,160,0.2)','rgba(255,255,255,0.06)'];p.style.cssText='width:'+s+'px;height:'+s+'px;left:'+Math.random()*100+'%;background:'+colors[Math.floor(Math.random()*colors.length)]+';animation-duration:'+(Math.random()*12+8)+'s;animation-delay:'+(Math.random()*6)+'s;';pc.appendChild(p);}
-var total=7;var dotsEl=document.getElementById('dots');
-for(var i=0;i<total;i++){var d=document.createElement('div');d.className='dot'+(i===0?' active':'');dotsEl.appendChild(d);}
-var slides=document.querySelectorAll('.slide');var dots=document.querySelectorAll('.dot');
-var obs=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){var idx=Array.from(slides).indexOf(e.target);dots.forEach(function(d,i){d.className='dot'+(i===idx?' active':'');});}});},{threshold:0.5});
+if(window.Telegram&&window.Telegram.WebApp){Telegram.WebApp.ready();Telegram.WebApp.expand();}
+function ctg(){if(window.Telegram&&window.Telegram.WebApp)Telegram.WebApp.close();}
+
+var total=7,de=document.getElementById('dots');
+for(var i=0;i<total;i++){var d=document.createElement('div');d.className='dot'+(i===0?' active':'');de.appendChild(d);}
+
+function cnt(el,target,suffix,dur){
+  var v=0,step=target/60;
+  var t=setInterval(function(){v+=step;if(v>=target){v=target;clearInterval(t);}
+    el.textContent=suffix==="so'm"?Math.floor(v).toLocaleString()+' so\'m':Math.floor(v).toLocaleString()+(suffix||'');
+  },dur/60);
+}
+
+var slides=document.querySelectorAll('.slide');
+var dots=document.querySelectorAll('.dot');
+var gpb=document.getElementById('gpb');
+var revealed={};
+
+var obs=new IntersectionObserver(function(entries){
+  entries.forEach(function(e){
+    if(e.isIntersecting){
+      var idx=Array.from(slides).indexOf(e.target);
+      dots.forEach(function(d,i){d.className='dot'+(i===idx?' active':'');});
+      gpb.style.width=((idx+1)/total*100)+'%';
+      if(!revealed[idx]){
+        revealed[idx]=true;
+        e.target.querySelectorAll('.reveal,.reveal-left,.reveal-scale').forEach(function(r,i){
+          setTimeout(function(){r.classList.add('shown');},60+i*32);
+        });
+        if(idx===5){
+          setTimeout(function(){cnt(document.getElementById('rc1'),185000,"so'm",1400)},600);
+          setTimeout(function(){cnt(document.getElementById('rc2'),112500,'',1200)},700);
+          setTimeout(function(){cnt(document.getElementById('rc3'),72500,'',1200)},800);
+        }
+      }
+    }
+  });
+},{threshold:0.4});
 slides.forEach(function(s){obs.observe(s);});
+
+setTimeout(function(){
+  document.querySelector('.slide').querySelectorAll('.reveal,.reveal-left,.reveal-scale').forEach(function(r,i){
+    setTimeout(function(){r.classList.add('shown');},80+i*40);
+  });
+  revealed[0]=true;
+},150);
+
+document.querySelectorAll('.amount-btn').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('.amount-btn').forEach(function(b){b.classList.remove('selected');});
+    btn.classList.add('selected');
+  });
+});
 </script>
 </body>
 </html>
