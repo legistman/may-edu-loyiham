@@ -2,140 +2,142 @@
 <html lang="uz">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Legistman Bot</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{
-  height:100%;overflow:hidden;
+html,body{height:100%;overflow:hidden;
   font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','Helvetica Neue',sans-serif;
-  -webkit-font-smoothing:antialiased;
-}
+  -webkit-font-smoothing:antialiased;background:#08091a}
 
-/* ── BACKGROUND ── */
-body{background:#0a0a18}
-#bgc{
-  position:fixed;inset:0;z-index:0;
-  background:linear-gradient(155deg,#0c1828 0%,#0e0c22 30%,#160826 55%,#1e0a1a 78%,#0c1420 100%);
-}
-#bgc::before{
-  content:'';position:absolute;inset:0;
-  background:
-    radial-gradient(ellipse 65% 55% at 15% 15%, rgba(40,80,200,0.5) 0%,transparent 68%),
-    radial-gradient(ellipse 55% 65% at 85% 75%, rgba(140,40,180,0.42) 0%,transparent 65%),
-    radial-gradient(ellipse 45% 45% at 55% 25%, rgba(60,120,220,0.3) 0%,transparent 60%),
-    radial-gradient(ellipse 50% 40% at 25% 82%, rgba(180,60,130,0.3) 0%,transparent 62%),
-    radial-gradient(ellipse 30% 30% at 75% 10%, rgba(80,180,220,0.2) 0%,transparent 55%);
-  animation:bgani 14s ease-in-out infinite alternate;
-}
-@keyframes bgani{
-  0%{filter:hue-rotate(0deg) brightness(1)}
-  100%{filter:hue-rotate(18deg) brightness(1.07)}
-}
+/* ── WEBGL CANVAS (always behind) ── */
+#glc{position:fixed;inset:0;z-index:0;width:100%;height:100%}
+
+/* ── RIPPLE CANVAS (touch feedback) ── */
+#rpc{position:fixed;inset:0;z-index:2;pointer-events:none;width:100%;height:100%}
 
 /* ── SLIDES ── */
-.slides{position:relative;z-index:1;width:100%;height:100vh;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch}
+.slides{position:relative;z-index:3;width:100%;height:100vh;
+  overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch}
 .slides::-webkit-scrollbar{display:none}
-.slide{min-height:100vh;scroll-snap-align:start;position:relative;display:flex;flex-direction:column;overflow:hidden}
+.slide{min-height:100vh;scroll-snap-align:start;position:relative;
+  display:flex;flex-direction:column;overflow:hidden}
 
 /* ── PROGRESS ── */
 .gpb{position:fixed;top:0;left:0;height:2px;z-index:999;transition:width 0.4s ease;width:0%;
-  background:linear-gradient(90deg,rgba(255,255,255,0.85),rgba(255,255,255,0.35));border-radius:0 1px 1px 0}
+  background:linear-gradient(90deg,rgba(255,255,255,0.9),rgba(255,255,255,0.3));
+  border-radius:0 1px 1px 0}
 
 /* ── DOTS ── */
-.dots{position:fixed;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:5px;z-index:100}
-.dot{width:4px;height:4px;border-radius:2px;background:rgba(255,255,255,0.18);transition:all 0.45s cubic-bezier(.34,1.56,.64,1)}
-.dot.active{height:20px;background:rgba(255,255,255,0.72);box-shadow:0 0 6px rgba(255,255,255,0.35)}
+.dots{position:fixed;right:10px;top:50%;transform:translateY(-50%);
+  display:flex;flex-direction:column;gap:5px;z-index:100}
+.dot{width:4px;height:4px;border-radius:2px;background:rgba(255,255,255,0.18);
+  transition:all 0.45s cubic-bezier(.34,1.56,.64,1)}
+.dot.active{height:20px;background:rgba(255,255,255,0.75);
+  box-shadow:0 0 7px rgba(255,255,255,0.4)}
 
 /* ── REVEAL ── */
 .reveal{opacity:0;transform:translateY(22px);transition:opacity 0.55s ease,transform 0.55s ease}
 .reveal.shown{opacity:1;transform:translateY(0)}
 .reveal-left{opacity:0;transform:translateX(-18px);transition:opacity 0.5s ease,transform 0.5s ease}
 .reveal-left.shown{opacity:1;transform:translateX(0)}
-.reveal-scale{opacity:0;transform:scale(0.88);transition:opacity 0.5s ease,transform 0.5s cubic-bezier(.34,1.56,.64,1)}
+.reveal-scale{opacity:0;transform:scale(0.88);
+  transition:opacity 0.5s ease,transform 0.5s cubic-bezier(.34,1.56,.64,1)}
 .reveal-scale.shown{opacity:1;transform:scale(1)}
 
-/* ── LIQUID GLASS ── */
-.lg{
-  background:rgba(255,255,255,0.1);
-  backdrop-filter:blur(40px) saturate(200%) brightness(1.1);
-  -webkit-backdrop-filter:blur(40px) saturate(200%) brightness(1.1);
+/* ═══════════════════════════════════
+   LIQUID GLASS CARD
+   - CSS handles: static blur, borders
+   - JS adds: ripple distortion on touch
+═══════════════════════════════════ */
+.lg-card{
+  position:relative;overflow:hidden;
+  background:rgba(255,255,255,0.09);
+  backdrop-filter:blur(44px) saturate(200%) brightness(1.12);
+  -webkit-backdrop-filter:blur(44px) saturate(200%) brightness(1.12);
   border:1px solid rgba(255,255,255,0.2);
   border-bottom-color:rgba(255,255,255,0.07);
-  box-shadow:0 2px 0 rgba(255,255,255,0.16) inset,0 8px 32px rgba(0,0,0,0.28);
+  box-shadow:0 2px 0 rgba(255,255,255,0.17) inset,0 8px 32px rgba(0,0,0,0.3);
+  border-radius:20px;
+  transition:transform 0.18s cubic-bezier(.34,1.56,.64,1),
+             box-shadow 0.18s ease;
+  cursor:pointer;
 }
-.lg-sm{
-  background:rgba(255,255,255,0.08);
-  backdrop-filter:blur(28px) saturate(180%);
-  -webkit-backdrop-filter:blur(28px) saturate(180%);
-  border:1px solid rgba(255,255,255,0.14);
-  border-bottom-color:rgba(255,255,255,0.06);
-  box-shadow:0 1.5px 0 rgba(255,255,255,0.12) inset,0 4px 18px rgba(0,0,0,0.22);
+.lg-card::before{
+  content:'';position:absolute;inset:0;border-radius:inherit;
+  background:radial-gradient(circle at var(--tx,50%) var(--ty,0%),
+    rgba(255,255,255,0.18) 0%,transparent 65%);
+  opacity:0;transition:opacity 0.4s ease;pointer-events:none;z-index:1;
 }
+.lg-card.touched::before{opacity:1}
+.lg-card.pressed{transform:scale(0.975);
+  box-shadow:0 1px 0 rgba(255,255,255,0.12) inset,0 4px 16px rgba(0,0,0,0.35)}
+/* specular shimmer on touch */
+.lg-card::after{
+  content:'';position:absolute;top:0;left:-120%;width:60%;height:100%;
+  background:linear-gradient(105deg,transparent,rgba(255,255,255,0.12),transparent);
+  transform:skewX(-20deg);pointer-events:none;z-index:2;
+  transition:left 0s;
+}
+.lg-card.shimmer::after{left:160%;transition:left 0.5s ease}
 
 /* ── SECTION HEADER ── */
 .sec-head{padding:50px 20px 16px;position:relative;z-index:1}
-.sec-lbl{font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.42);display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.sec-lbl{font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
+  color:rgba(255,255,255,0.42);display:flex;align-items:center;gap:7px;margin-bottom:6px}
 .sec-lbl::before{content:'';display:block;width:14px;height:1px;background:rgba(255,255,255,0.28)}
 .sec-title{font-size:26px;font-weight:700;color:#fff;line-height:1.22;letter-spacing:-0.5px}
 .sec-sub{font-size:13px;color:rgba(255,255,255,0.32);margin-top:4px;font-weight:400}
 
-/* ────────────────────────────────────
-   S1  HERO
-──────────────────────────────────── */
+/* ══════ S1 HERO ══════ */
 .s1{justify-content:center;align-items:center;text-align:center;padding:0 22px}
-
-/* LOGO — SVG logotip */
 .logo-wrap{position:relative;width:96px;height:96px;margin:0 auto 20px}
-.logo-ring{position:absolute;inset:-12px;border-radius:50%;border:1px solid rgba(255,255,255,0.13);animation:spin 18s linear infinite}
-.logo-ring2{position:absolute;inset:-6px;border-radius:50%;border:1px dashed rgba(255,255,255,0.07);animation:spin 11s linear infinite reverse}
+.logo-ring{position:absolute;inset:-12px;border-radius:50%;
+  border:1px solid rgba(255,255,255,0.13);animation:spin 18s linear infinite}
+.logo-ring2{position:absolute;inset:-6px;border-radius:50%;
+  border:1px dashed rgba(255,255,255,0.07);animation:spin 11s linear infinite reverse}
 @keyframes spin{to{transform:rotate(360deg)}}
 .logo-box{
-  width:96px;height:96px;border-radius:50%;
+  width:96px;height:96px;border-radius:50%;overflow:hidden;
   display:flex;align-items:center;justify-content:center;
-  background:rgba(255,255,255,0.12);
+  background:rgba(255,255,255,0.13);
   backdrop-filter:blur(40px) saturate(200%);
   -webkit-backdrop-filter:blur(40px) saturate(200%);
-  border:1px solid rgba(255,255,255,0.25);
+  border:1px solid rgba(255,255,255,0.26);
   border-bottom-color:rgba(255,255,255,0.09);
   box-shadow:0 2px 0 rgba(255,255,255,0.28) inset,0 14px 44px rgba(0,0,0,0.38);
   animation:logop 4.5s ease-in-out infinite;
-  overflow:hidden;
 }
 @keyframes logop{
   0%,100%{box-shadow:0 2px 0 rgba(255,255,255,0.28) inset,0 14px 44px rgba(0,0,0,0.38)}
-  50%{box-shadow:0 2px 0 rgba(255,255,255,0.32) inset,0 14px 52px rgba(0,0,0,0.42),0 0 36px rgba(255,255,255,0.05)}
+  50%{box-shadow:0 2px 0 rgba(255,255,255,0.34) inset,0 14px 52px rgba(0,0,0,0.42),
+    0 0 40px rgba(255,255,255,0.06)}
 }
-/* Legistman logo SVG inside */
-.logo-box svg{width:62px;height:62px;fill:rgba(255,255,255,0.9)}
+.logo-box svg{width:64px;height:64px}
 
 .hero-badge{
   display:inline-flex;align-items:center;gap:5px;margin-bottom:12px;
   background:rgba(255,255,255,0.09);
   backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  border:1px solid rgba(255,255,255,0.18);
-  border-radius:20px;padding:5px 12px;
-  font-size:11px;font-weight:600;letter-spacing:0.05em;color:rgba(255,255,255,0.82);
+  border:1px solid rgba(255,255,255,0.18);border-radius:20px;
+  padding:5px 12px;font-size:11px;font-weight:600;
+  letter-spacing:0.05em;color:rgba(255,255,255,0.82);
 }
-.bdot{width:6px;height:6px;border-radius:50%;background:#30d158;box-shadow:0 0 6px rgba(48,209,88,0.8);animation:blink 2s ease-in-out infinite}
+.bdot{width:6px;height:6px;border-radius:50%;background:#30d158;
+  box-shadow:0 0 6px rgba(48,209,88,0.8);animation:blink 2s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
 
-.hero-title{
-  font-size:34px;font-weight:700;color:#fff;line-height:1.18;
-  letter-spacing:-0.8px;margin-bottom:12px;
-  min-height:128px;
-  text-shadow:0 1px 12px rgba(0,0,0,0.3);
-}
-.hero-title span{
-  background:linear-gradient(135deg,#fff,rgba(180,210,255,0.88));
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-}
-.cursor{display:inline-block;width:2px;height:0.88em;background:rgba(255,255,255,0.85);margin-left:2px;animation:cur 0.8s step-end infinite;vertical-align:text-bottom;border-radius:1px}
+.hero-title{font-size:34px;font-weight:700;color:#fff;line-height:1.18;
+  letter-spacing:-0.8px;margin-bottom:12px;min-height:128px;
+  text-shadow:0 1px 12px rgba(0,0,0,0.3)}
+.cursor{display:inline-block;width:2px;height:0.88em;background:rgba(255,255,255,0.85);
+  margin-left:2px;animation:cur 0.8s step-end infinite;
+  vertical-align:text-bottom;border-radius:1px}
 @keyframes cur{0%,100%{opacity:1}50%{opacity:0}}
 
-.hero-sub{font-size:14px;color:rgba(255,255,255,0.38);line-height:1.7;margin-bottom:22px;font-weight:400}
-
+.hero-sub{font-size:14px;color:rgba(255,255,255,0.38);line-height:1.7;
+  margin-bottom:22px;font-weight:400}
 .hero-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:20px}
 .hst{
   padding:11px 7px;text-align:center;border-radius:16px;
@@ -149,26 +151,21 @@ body{background:#0a0a18}
 .hst-n{font-size:19px;font-weight:700;color:#fff;letter-spacing:-0.3px}
 .hst-l{font-size:9px;color:rgba(255,255,255,0.3);margin-top:3px;line-height:1.4;font-weight:400}
 
-.scroll-hint{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:4px;animation:sh 2.5s ease-in-out infinite}
-@keyframes sh{0%,100%{opacity:0.3;transform:translateX(-50%) translateY(0)}50%{opacity:0.8;transform:translateX(-50%) translateY(6px)}}
-.scroll-hint span{font-size:9px;color:rgba(255,255,255,0.28);letter-spacing:0.1em;font-weight:600}
-.scroll-hint svg{width:14px;height:9px;stroke:rgba(255,255,255,0.28);fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.scroll-hint{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  animation:sh 2.5s ease-in-out infinite}
+@keyframes sh{
+  0%,100%{opacity:0.3;transform:translateX(-50%) translateY(0)}
+  50%{opacity:0.8;transform:translateX(-50%) translateY(6px)}}
+.scroll-hint span{font-size:9px;color:rgba(255,255,255,0.28);
+  letter-spacing:0.1em;font-weight:600}
+.scroll-hint svg{width:14px;height:9px;stroke:rgba(255,255,255,0.28);
+  fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
 
-/* ────────────────────────────────────
-   S2  IMKONIYATLAR
-──────────────────────────────────── */
-.feat-list{padding:2px 18px 26px;flex:1;display:flex;flex-direction:column;gap:8px;position:relative;z-index:1}
-.feat-card{
-  padding:14px;display:flex;align-items:center;gap:13px;border-radius:20px;
-  background:rgba(255,255,255,0.09);
-  backdrop-filter:blur(36px) saturate(180%) brightness(1.05);
-  -webkit-backdrop-filter:blur(36px) saturate(180%) brightness(1.05);
-  border:1px solid rgba(255,255,255,0.15);
-  border-bottom-color:rgba(255,255,255,0.06);
-  box-shadow:0 2px 0 rgba(255,255,255,0.12) inset,0 4px 18px rgba(0,0,0,0.2);
-  transition:transform 0.18s;
-}
-.feat-card:active{transform:scale(0.98)}
+/* ══════ S2 IMKONIYATLAR ══════ */
+.feat-list{padding:2px 18px 26px;flex:1;display:flex;flex-direction:column;
+  gap:8px;position:relative;z-index:1}
+.feat-card{padding:14px;display:flex;align-items:center;gap:13px}
 .feat-icon{
   width:44px;height:44px;border-radius:13px;font-size:20px;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
@@ -177,87 +174,56 @@ body{background:#0a0a18}
   border-bottom-color:rgba(255,255,255,0.07);
   box-shadow:0 1.5px 0 rgba(255,255,255,0.16) inset;
 }
-.feat-title{font-size:14px;font-weight:600;color:rgba(255,255,255,0.9);margin-bottom:3px;letter-spacing:-0.2px}
+.feat-title{font-size:14px;font-weight:600;color:rgba(255,255,255,0.9);
+  margin-bottom:3px;letter-spacing:-0.2px}
 .feat-sub{font-size:11px;color:rgba(255,255,255,0.32);line-height:1.55;font-weight:400;flex:1}
-.feat-arr{
-  width:22px;height:22px;border-radius:50%;flex-shrink:0;
+.feat-arr{width:22px;height:22px;border-radius:50%;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  background:rgba(255,255,255,0.07);
-  border:1px solid rgba(255,255,255,0.12);
-}
-.feat-arr svg{width:10px;height:10px;stroke:rgba(255,255,255,0.35);fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+  background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12)}
+.feat-arr svg{width:10px;height:10px;stroke:rgba(255,255,255,0.35);
+  fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
 
-/* ────────────────────────────────────
-   S3  TEST FORMATI
-──────────────────────────────────── */
-.v-list{padding:0 18px 16px;flex:1;display:flex;flex-direction:column;gap:8px;position:relative;z-index:1}
-.v-card{
-  padding:15px;border-radius:20px;
-  background:rgba(255,255,255,0.09);
-  backdrop-filter:blur(36px) saturate(180%);
-  -webkit-backdrop-filter:blur(36px) saturate(180%);
-  border:1px solid rgba(255,255,255,0.15);
-  border-bottom-color:rgba(255,255,255,0.06);
-  box-shadow:0 2px 0 rgba(255,255,255,0.12) inset,0 4px 16px rgba(0,0,0,0.2);
-}
+/* ══════ S3 TEST FORMATI ══════ */
+.v-list{padding:0 18px 16px;flex:1;display:flex;flex-direction:column;
+  gap:8px;position:relative;z-index:1}
+.v-card{padding:15px}
 .v-head{display:flex;align-items:center;gap:12px;margin-bottom:10px}
-.v-icon{
-  width:40px;height:40px;border-radius:12px;font-size:18px;flex-shrink:0;
+.v-icon{width:40px;height:40px;border-radius:12px;font-size:18px;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
-  background:rgba(255,255,255,0.1);
-  border:1px solid rgba(255,255,255,0.16);
-  box-shadow:0 1.5px 0 rgba(255,255,255,0.14) inset;
-}
+  background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.16);
+  box-shadow:0 1.5px 0 rgba(255,255,255,0.14) inset}
 .v-name{font-size:14px;font-weight:600;color:rgba(255,255,255,0.88);letter-spacing:-0.2px}
 .v-desc{font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;font-weight:400}
 .v-tags{display:flex;flex-wrap:wrap;gap:6px}
-.v-tag{
-  font-size:10px;font-weight:600;padding:3px 9px;border-radius:9px;
-  background:rgba(255,255,255,0.09);
-  border:1px solid rgba(255,255,255,0.15);
-  color:rgba(255,255,255,0.6);
-}
-.format-note{
-  margin:0 18px;padding:13px 15px;border-radius:16px;
+.v-tag{font-size:10px;font-weight:600;padding:3px 9px;border-radius:9px;
+  background:rgba(255,255,255,0.09);border:1px solid rgba(255,255,255,0.15);
+  color:rgba(255,255,255,0.6)}
+.format-note{margin:0 18px;padding:13px 15px;border-radius:16px;
   background:rgba(255,255,255,0.06);
   backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  border:1px solid rgba(255,255,255,0.11);
-}
+  border:1px solid rgba(255,255,255,0.11)}
 .format-note p{font-size:12px;color:rgba(255,255,255,0.32);line-height:1.75;font-weight:400}
 .format-note span{color:rgba(200,220,255,0.75);font-weight:600}
 
-/* ────────────────────────────────────
-   S4  BEPUL vs PRO
-──────────────────────────────────── */
-.comp-wrap{padding:0 18px 14px;flex:1;display:flex;flex-direction:column;gap:6px;position:relative;z-index:1}
+/* ══════ S4 BEPUL vs PRO ══════ */
+.comp-wrap{padding:0 18px 14px;flex:1;display:flex;flex-direction:column;
+  gap:6px;position:relative;z-index:1}
 .comp-hdr{display:grid;grid-template-columns:1fr 20px 1fr;gap:6px;margin-bottom:2px}
-.comp-col{
-  border-radius:11px;padding:9px;text-align:center;
+.comp-col{border-radius:11px;padding:9px;text-align:center;
   font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);
-  background:rgba(255,255,255,0.06);
-  border:1px solid rgba(255,255,255,0.1);
-}
-.comp-col.pro{
-  color:rgba(255,255,255,0.82);
-  background:rgba(255,255,255,0.11);
-  border-color:rgba(255,255,255,0.2);
-  box-shadow:0 1.5px 0 rgba(255,255,255,0.14) inset;
-}
+  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1)}
+.comp-col.pro{color:rgba(255,255,255,0.82);
+  background:rgba(255,255,255,0.11);border-color:rgba(255,255,255,0.2);
+  box-shadow:0 1.5px 0 rgba(255,255,255,0.14) inset}
 .comp-row{display:grid;grid-template-columns:1fr 20px 1fr;gap:6px;align-items:stretch}
-.comp-cell{
-  border-radius:11px;padding:9px 10px;text-align:center;
-  background:rgba(255,255,255,0.05);
-  border:1px solid rgba(255,255,255,0.08);
-}
-.comp-cell.pro-cell{
-  background:rgba(255,255,255,0.08);
-  border-color:rgba(255,255,255,0.14);
-}
+.comp-cell{border-radius:11px;padding:9px 10px;text-align:center;
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08)}
+.comp-cell.pro-cell{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.14)}
 .ci{font-size:13px;margin-bottom:2px}
 .ct{font-size:10px;color:rgba(255,255,255,0.3);line-height:1.4;font-weight:400}
 .ct.pro-t{color:rgba(255,255,255,0.7)}
-.vs-sep{display:flex;align-items:center;justify-content:center;font-size:9px;color:rgba(255,255,255,0.2);font-weight:700}
-
+.vs-sep{display:flex;align-items:center;justify-content:center;
+  font-size:9px;color:rgba(255,255,255,0.2);font-weight:700}
 .price-card{
   margin:0 18px;padding:18px 20px;border-radius:20px;
   display:flex;align-items:center;justify-content:space-between;
@@ -267,26 +233,24 @@ body{background:#0a0a18}
   -webkit-backdrop-filter:blur(40px) saturate(200%);
   border:1px solid rgba(255,255,255,0.2);
   border-bottom-color:rgba(255,255,255,0.07);
-  box-shadow:0 2px 0 rgba(255,255,255,0.16) inset,0 8px 28px rgba(0,0,0,0.25);
+  box-shadow:0 2px 0 rgba(255,255,255,0.16) inset,0 8px 28px rgba(0,0,0,0.25)
 }
-.price-shine{position:absolute;top:0;left:0;right:0;height:45%;background:linear-gradient(180deg,rgba(255,255,255,0.07),transparent);pointer-events:none}
-.price-bdg{
-  display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.08em;
+.price-shine{position:absolute;top:0;left:0;right:0;height:45%;
+  background:linear-gradient(180deg,rgba(255,255,255,0.07),transparent);pointer-events:none}
+.price-bdg{display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.08em;
   color:rgba(255,255,255,0.55);text-transform:uppercase;
   background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);
-  border-radius:6px;padding:2px 7px;margin-bottom:8px;
-}
+  border-radius:6px;padding:2px 7px;margin-bottom:8px}
 .price-main{font-size:28px;font-weight:700;color:#fff;margin-bottom:2px;letter-spacing:-0.6px}
 .price-main span{font-size:15px;color:rgba(255,255,255,0.42);font-weight:400}
 .price-per{font-size:11px;color:rgba(255,255,255,0.3);font-weight:400}
 .price-right{text-align:center;padding-left:14px;position:relative}
-.price-rl{font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:3px;font-weight:400;text-transform:uppercase;letter-spacing:0.06em}
+.price-rl{font-size:9px;color:rgba(255,255,255,0.3);margin-bottom:3px;font-weight:400;
+  text-transform:uppercase;letter-spacing:0.06em}
 .price-rn{font-size:15px;font-weight:700;color:#fff}
 .price-ru{font-size:9px;color:rgba(255,255,255,0.28);margin-top:1px;font-weight:400}
 
-/* ────────────────────────────────────
-   S5  TO'LOV
-──────────────────────────────────── */
+/* ══════ S5 TO'LOV ══════ */
 .bank-card{
   margin:6px 18px 13px;border-radius:24px;padding:22px;
   position:relative;overflow:hidden;z-index:1;
@@ -297,43 +261,46 @@ body{background:#0a0a18}
   border-bottom-color:rgba(255,255,255,0.07);
   box-shadow:0 2px 0 rgba(255,255,255,0.18) inset,0 18px 52px rgba(0,0,0,0.4);
 }
-.bc-shine{position:absolute;top:0;left:0;right:0;height:50%;background:linear-gradient(180deg,rgba(255,255,255,0.08),transparent);pointer-events:none}
-.chip{width:30px;height:22px;background:rgba(255,255,255,0.2);border-radius:5px;margin-bottom:18px;position:relative;z-index:1;border:1px solid rgba(255,255,255,0.14);box-shadow:0 1px 0 rgba(255,255,255,0.22) inset}
-.card-num{font-size:15px;color:rgba(255,255,255,0.9);letter-spacing:0.16em;font-weight:500;margin-bottom:16px;position:relative;z-index:1}
-.card-foot{display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:1}
-.card-lbl{font-size:9px;color:rgba(255,255,255,0.32);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.06em}
+.bc-shine{position:absolute;top:0;left:0;right:0;height:50%;
+  background:linear-gradient(180deg,rgba(255,255,255,0.08),transparent);pointer-events:none}
+.chip{width:30px;height:22px;background:rgba(255,255,255,0.2);border-radius:5px;
+  margin-bottom:18px;position:relative;z-index:1;
+  border:1px solid rgba(255,255,255,0.14);
+  box-shadow:0 1px 0 rgba(255,255,255,0.22) inset}
+.card-num{font-size:15px;color:rgba(255,255,255,0.9);letter-spacing:0.16em;
+  font-weight:500;margin-bottom:16px;position:relative;z-index:1}
+.card-foot{display:flex;justify-content:space-between;align-items:flex-end;
+  position:relative;z-index:1}
+.card-lbl{font-size:9px;color:rgba(255,255,255,0.32);margin-bottom:2px;
+  text-transform:uppercase;letter-spacing:0.06em}
 .card-name{font-size:13px;color:rgba(255,255,255,0.82);font-weight:500}
 .card-brand{font-size:11px;color:rgba(255,255,255,0.38);font-weight:600;letter-spacing:0.08em}
-
-.steps-box{
-  margin:0 18px 12px;padding:15px;border-radius:18px;z-index:1;position:relative;
+.steps-box{margin:0 18px 12px;padding:15px;border-radius:18px;z-index:1;position:relative;
   background:rgba(255,255,255,0.07);
   backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
-  border:1px solid rgba(255,255,255,0.12);
-}
-.steps-lbl{font-size:10px;color:rgba(255,255,255,0.28);font-weight:700;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:11px}
+  border:1px solid rgba(255,255,255,0.12)}
+.steps-lbl{font-size:10px;color:rgba(255,255,255,0.28);font-weight:700;
+  letter-spacing:0.08em;text-transform:uppercase;margin-bottom:11px}
 .step-row{display:flex;align-items:flex-start;gap:11px;margin-bottom:9px}
 .step-row:last-child{margin-bottom:0}
-.step-num{
-  width:24px;height:24px;border-radius:50%;flex-shrink:0;
+.step-num{width:24px;height:24px;border-radius:50%;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;
   font-size:11px;font-weight:700;color:#fff;
   background:rgba(255,255,255,0.14);
   border:1px solid rgba(255,255,255,0.2);
-  box-shadow:0 1px 0 rgba(255,255,255,0.16) inset;
-}
-.step-txt{font-size:13px;color:rgba(255,255,255,0.55);line-height:1.55;padding-top:3px;font-weight:400}
-
-.info-box{
-  margin:0 18px 12px;display:flex;gap:9px;padding:11px 13px;z-index:1;position:relative;
+  box-shadow:0 1px 0 rgba(255,255,255,0.16) inset}
+.step-txt{font-size:13px;color:rgba(255,255,255,0.55);line-height:1.55;
+  padding-top:3px;font-weight:400}
+.info-box{margin:0 18px 12px;display:flex;gap:9px;padding:11px 13px;
+  z-index:1;position:relative;
   background:rgba(255,255,255,0.05);
   backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  border:1px solid rgba(255,255,255,0.1);border-radius:14px;
-}
-.info-box svg{width:14px;height:14px;stroke:rgba(255,255,255,0.3);fill:none;stroke-width:2;flex-shrink:0;margin-top:1px}
+  border:1px solid rgba(255,255,255,0.1);border-radius:14px}
+.info-box svg{width:14px;height:14px;stroke:rgba(255,255,255,0.3);
+  fill:none;stroke-width:2;flex-shrink:0;margin-top:1px}
 .info-box span{font-size:12px;color:rgba(255,255,255,0.35);line-height:1.62;font-weight:400}
 
-/* ── iOS BUTTON ── */
+/* ══════ iOS BUTTON ══════ */
 .ios-btn{
   margin:0 18px;width:calc(100% - 36px);padding:15px;
   font-size:15px;font-weight:600;color:#fff;letter-spacing:-0.1px;
@@ -344,40 +311,37 @@ body{background:#0a0a18}
   border:1px solid rgba(255,255,255,0.28);
   border-bottom-color:rgba(255,255,255,0.1);
   box-shadow:0 2px 0 rgba(255,255,255,0.2) inset,0 8px 28px rgba(0,0,0,0.22);
-  transition:all 0.15s;
+  transition:all 0.15s;overflow:hidden;
 }
 .ios-btn:active{transform:scale(0.97);opacity:0.88}
 
-/* ────────────────────────────────────
-   S6  CTA
-──────────────────────────────────── */
+/* ══════ S6 CTA ══════ */
 .s6{justify-content:center;align-items:center;text-align:center;padding:36px 22px}
-
 .cta-rings{position:relative;width:90px;height:90px;margin:0 auto 22px;z-index:2}
-.cr{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(255,255,255,0.1);animation:exp 3.2s ease-out infinite}
+.cr{position:absolute;inset:0;border-radius:50%;
+  border:1px solid rgba(255,255,255,0.1);animation:exp 3.2s ease-out infinite}
 .cr:nth-child(2){animation-delay:1.07s}
 .cr:nth-child(3){animation-delay:2.13s}
 @keyframes exp{0%{transform:scale(1);opacity:0.5}100%{transform:scale(2.5);opacity:0}}
-.cta-icon{
-  position:absolute;inset:0;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;overflow:hidden;
-  background:rgba(255,255,255,0.12);
+.cta-icon-box{position:absolute;inset:0;border-radius:50%;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,0.13);
   backdrop-filter:blur(40px) saturate(200%);
   -webkit-backdrop-filter:blur(40px) saturate(200%);
   border:1px solid rgba(255,255,255,0.26);
   border-bottom-color:rgba(255,255,255,0.09);
-  box-shadow:0 2px 0 rgba(255,255,255,0.24) inset,0 10px 36px rgba(0,0,0,0.32);
-}
-.cta-icon svg{width:52px;height:52px;fill:rgba(255,255,255,0.88)}
-
-.cta-title{position:relative;z-index:2;font-size:30px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:10px;letter-spacing:-0.7px}
-.cta-title span{background:linear-gradient(135deg,#fff,rgba(180,210,255,0.88));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.cta-sub{position:relative;z-index:2;font-size:14px;color:rgba(255,255,255,0.35);line-height:1.75;margin-bottom:26px;font-weight:400}
-
+  box-shadow:0 2px 0 rgba(255,255,255,0.24) inset,0 10px 36px rgba(0,0,0,0.32)}
+.cta-icon-box svg{width:58px;height:58px}
+.cta-title{position:relative;z-index:2;font-size:30px;font-weight:700;color:#fff;
+  line-height:1.2;margin-bottom:10px;letter-spacing:-0.7px}
+.cta-title span{background:linear-gradient(135deg,#fff,rgba(180,210,255,0.88));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.cta-sub{position:relative;z-index:2;font-size:14px;color:rgba(255,255,255,0.35);
+  line-height:1.75;margin-bottom:26px;font-weight:400}
 .cta-btn{
   position:relative;z-index:2;width:100%;margin-bottom:10px;
   padding:16px;font-size:15px;font-weight:600;color:#fff;letter-spacing:-0.1px;
-  border:none;border-radius:18px;cursor:pointer;
+  border:none;border-radius:18px;cursor:pointer;overflow:hidden;
   background:rgba(255,255,255,0.17);
   backdrop-filter:blur(36px) saturate(180%);
   -webkit-backdrop-filter:blur(36px) saturate(180%);
@@ -387,53 +351,45 @@ body{background:#0a0a18}
   transition:all 0.15s;
 }
 .cta-btn:active{transform:scale(0.97)}
-.cta-ghost{
-  position:relative;z-index:2;width:100%;margin-bottom:20px;
+.cta-ghost{position:relative;z-index:2;width:100%;margin-bottom:20px;
   padding:14px;font-size:13px;font-weight:500;color:rgba(255,255,255,0.5);
-  border:none;border-radius:16px;cursor:pointer;
+  border:none;border-radius:16px;cursor:pointer;overflow:hidden;
   background:rgba(255,255,255,0.07);
   backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  border:1px solid rgba(255,255,255,0.12);
-  transition:all 0.15s;
-}
-.cta-note{position:relative;z-index:2;font-size:10px;color:rgba(255,255,255,0.17);line-height:1.9;font-weight:400}
+  border:1px solid rgba(255,255,255,0.12);transition:all 0.15s}
+.cta-note{position:relative;z-index:2;font-size:10px;
+  color:rgba(255,255,255,0.17);line-height:1.9;font-weight:400}
 </style>
 </head>
 <body>
-<div id="bgc"></div>
-<script>if(window.Telegram&&window.Telegram.WebApp){Telegram.WebApp.ready();Telegram.WebApp.expand();}</script>
+
+<!-- WebGL background canvas -->
+<canvas id="glc"></canvas>
+<!-- Ripple / touch feedback canvas -->
+<canvas id="rpc"></canvas>
+
+<script>
+if(window.Telegram&&window.Telegram.WebApp){Telegram.WebApp.ready();Telegram.WebApp.expand();}
+</script>
+
 <div class="gpb" id="gpb"></div>
 <div class="dots" id="dots"></div>
 <div class="slides">
 
-<!-- S1: HERO -->
+<!-- S1 -->
 <div class="slide s1">
-  <div style="position:relative;z-index:2;width:100%;text-align:center" id="hc">
+  <div style="position:relative;z-index:2;width:100%;text-align:center">
     <div class="logo-wrap reveal-scale">
-      <div class="logo-ring"></div>
-      <div class="logo-ring2"></div>
+      <div class="logo-ring"></div><div class="logo-ring2"></div>
       <div class="logo-box">
         <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
-          <!-- rounded diamond / rotated square -->
-          <rect x="18" y="18" width="60" height="60" rx="12" ry="12"
-                transform="rotate(45 48 48)"
-                fill="rgba(255,255,255,0.88)"/>
-          <!-- Person silhouette inside diamond -->
-          <!-- head -->
-          <ellipse cx="48" cy="30" rx="8" ry="9" fill="#1a1a3a"/>
-          <!-- neck + shoulders -->
-          <path d="M34 58 C34 44 62 44 62 58 L62 56 C62 42 34 42 34 56 Z" fill="#1a1a3a"/>
-          <!-- LEGIST -->
-          <text x="48" y="70" text-anchor="middle"
-                font-family="-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif"
-                font-size="8.5" font-weight="800" fill="#1a1a3a" letter-spacing="0.5">LEGIST</text>
-          <!-- MAN -->
-          <text x="48" y="79" text-anchor="middle"
-                font-family="-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif"
-                font-size="8.5" font-weight="800" fill="#1a1a3a" letter-spacing="0.5">MAN</text>
-          <!-- right chevrons (the // marks from logo) -->
-          <path d="M68 36 L74 40 L68 44" fill="none" stroke="#1a1a3a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M65 40 L71 44 L65 48" fill="none" stroke="#1a1a3a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="18" y="18" width="60" height="60" rx="12" ry="12" transform="rotate(45 48 48)" fill="rgba(255,255,255,0.9)"/>
+          <ellipse cx="48" cy="30" rx="8" ry="9" fill="#16163a"/>
+          <path d="M33 56 C33 43 63 43 63 56 L63 54 C63 41 33 41 33 54 Z" fill="#16163a"/>
+          <text x="48" y="69" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="8.5" font-weight="800" fill="#16163a" letter-spacing="0.4">LEGIST</text>
+          <text x="48" y="78" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="8.5" font-weight="800" fill="#16163a" letter-spacing="0.4">MAN</text>
+          <path d="M67 35 L73 39 L67 43" fill="none" stroke="#16163a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M64 40 L70 44 L64 48" fill="none" stroke="#16163a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
     </div>
@@ -454,49 +410,37 @@ body{background:#0a0a18}
   </div>
 </div>
 
-<!-- S2: IMKONIYATLAR -->
+<!-- S2 -->
 <div class="slide s2">
   <div class="sec-head">
     <div class="sec-lbl reveal-left">IMKONIYATLAR</div>
     <div class="sec-title reveal" style="transition-delay:0.1s">Bot orqali nimalarga<br>erisha olasiz?</div>
   </div>
   <div class="feat-list">
-    <div class="feat-card reveal" style="transition-delay:0.15s">
+    <div class="lg-card feat-card reveal" style="transition-delay:0.15s">
       <div class="feat-icon">📝</div>
-      <div style="flex:1">
-        <div class="feat-title">BMBA format testlar</div>
-        <div class="feat-sub">1-VARIANT, 2-VARIANT... — har variant 30 ta murakkab savol, vaqt cheklangan</div>
-      </div>
+      <div style="flex:1"><div class="feat-title">BMBA format testlar</div><div class="feat-sub">1-VARIANT, 2-VARIANT... — har variant 30 ta murakkab savol, vaqt cheklangan</div></div>
       <div class="feat-arr"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
     </div>
-    <div class="feat-card reveal" style="transition-delay:0.2s">
+    <div class="lg-card feat-card reveal" style="transition-delay:0.2s">
       <div class="feat-icon">📚</div>
-      <div style="flex:1">
-        <div class="feat-title">Professional qo'llanmalar</div>
-        <div class="feat-sub">Imtihon mavzulari bo'yicha tizimli, batafsil o'quv materiallari</div>
-      </div>
+      <div style="flex:1"><div class="feat-title">Professional qo'llanmalar</div><div class="feat-sub">Imtihon mavzulari bo'yicha tizimli, batafsil o'quv materiallari</div></div>
       <div class="feat-arr"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
     </div>
-    <div class="feat-card reveal" style="transition-delay:0.25s">
+    <div class="lg-card feat-card reveal" style="transition-delay:0.25s">
       <div class="feat-icon">📊</div>
-      <div style="flex:1">
-        <div class="feat-title">Xato tahlili (PRO)</div>
-        <div class="feat-sub">Har bir xato savolni ko'ring, to'g'ri javobni bilib oling</div>
-      </div>
+      <div style="flex:1"><div class="feat-title">Xato tahlili (PRO)</div><div class="feat-sub">Har bir xato savolni ko'ring, to'g'ri javobni bilib oling</div></div>
       <div class="feat-arr"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
     </div>
-    <div class="feat-card reveal" style="transition-delay:0.3s">
+    <div class="lg-card feat-card reveal" style="transition-delay:0.3s">
       <div class="feat-icon">🏆</div>
-      <div style="flex:1">
-        <div class="feat-title">Reyting tizimi</div>
-        <div class="feat-sub">O'zingizni boshqa o'quvchilar bilan solishtiring</div>
-      </div>
+      <div style="flex:1"><div class="feat-title">Reyting tizimi</div><div class="feat-sub">O'zingizni boshqa o'quvchilar bilan solishtiring</div></div>
       <div class="feat-arr"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
     </div>
   </div>
 </div>
 
-<!-- S3: TEST FORMATI -->
+<!-- S3 -->
 <div class="slide s3">
   <div class="sec-head">
     <div class="sec-lbl reveal-left">TEST FORMATI</div>
@@ -504,25 +448,16 @@ body{background:#0a0a18}
     <div class="sec-sub reveal" style="transition-delay:0.15s">Har bir variant — haqiqiy imtihon sharoiti</div>
   </div>
   <div class="v-list">
-    <div class="v-card reveal" style="transition-delay:0.2s">
-      <div class="v-head">
-        <div class="v-icon">📋</div>
-        <div><div class="v-name">1-VARIANT · 2-VARIANT · 3-VARIANT...</div><div class="v-desc">Variantlar ketma-ket, har biri o'ziga xos</div></div>
-      </div>
+    <div class="lg-card v-card reveal" style="transition-delay:0.2s">
+      <div class="v-head"><div class="v-icon">📋</div><div><div class="v-name">1-VARIANT · 2-VARIANT · 3-VARIANT...</div><div class="v-desc">Variantlar ketma-ket, har biri o'ziga xos</div></div></div>
       <div class="v-tags"><span class="v-tag">30 ta savol</span><span class="v-tag">Vaqt cheklangan</span><span class="v-tag">BMBA format</span></div>
     </div>
-    <div class="v-card reveal" style="transition-delay:0.25s">
-      <div class="v-head">
-        <div class="v-icon">🆓</div>
-        <div><div class="v-name">Bepul variantlar</div><div class="v-desc">Bir nechta variant bepul ochiq — sinab ko'ring</div></div>
-      </div>
+    <div class="lg-card v-card reveal" style="transition-delay:0.25s">
+      <div class="v-head"><div class="v-icon">🆓</div><div><div class="v-name">Bepul variantlar</div><div class="v-desc">Bir nechta variant bepul ochiq — sinab ko'ring</div></div></div>
       <div class="v-tags"><span class="v-tag">Bepul kirish</span><span class="v-tag">Cheklangan son</span></div>
     </div>
-    <div class="v-card reveal" style="transition-delay:0.3s">
-      <div class="v-head">
-        <div class="v-icon">👑</div>
-        <div><div class="v-name">PRO — barcha variantlar</div><div class="v-desc">Barcha variantlarga to'liq kirish + xato tahlili</div></div>
-      </div>
+    <div class="lg-card v-card reveal" style="transition-delay:0.3s">
+      <div class="v-head"><div class="v-icon">👑</div><div><div class="v-name">PRO — barcha variantlar</div><div class="v-desc">Barcha variantlarga to'liq kirish + xato tahlili</div></div></div>
       <div class="v-tags"><span class="v-tag">Barcha variantlar</span><span class="v-tag">Xato tahlili</span><span class="v-tag">Javob kaliti</span></div>
     </div>
   </div>
@@ -531,7 +466,7 @@ body{background:#0a0a18}
   </div>
 </div>
 
-<!-- S4: BEPUL vs PRO -->
+<!-- S4 -->
 <div class="slide s4">
   <div class="sec-head">
     <div class="sec-lbl reveal-left">TARIFLAR</div>
@@ -539,9 +474,7 @@ body{background:#0a0a18}
   </div>
   <div class="comp-wrap">
     <div class="comp-hdr reveal" style="transition-delay:0.15s">
-      <div class="comp-col">🆓 Bepul</div>
-      <div></div>
-      <div class="comp-col pro">👑 PRO</div>
+      <div class="comp-col">🆓 Bepul</div><div></div><div class="comp-col pro">👑 PRO</div>
     </div>
     <div class="comp-row reveal" style="transition-delay:0.2s">
       <div class="comp-cell"><div class="ci">📝</div><div class="ct">Cheklangan variantlar</div></div>
@@ -569,7 +502,7 @@ body{background:#0a0a18}
       <div class="comp-cell pro-cell"><div class="ci">✅</div><div class="ct pro-t">Shaxsiy reyting</div></div>
     </div>
   </div>
-  <div class="price-card reveal-scale" style="transition-delay:0.45s;margin-bottom:22px">
+  <div class="price-card lg-card reveal-scale" style="transition-delay:0.45s;margin-bottom:22px">
     <div class="price-shine"></div>
     <div style="flex:1;position:relative">
       <div class="price-bdg">PRO OBUNA</div>
@@ -584,13 +517,13 @@ body{background:#0a0a18}
   </div>
 </div>
 
-<!-- S5: TO'LOV -->
+<!-- S5 -->
 <div class="slide s5">
   <div class="sec-head">
     <div class="sec-lbl reveal-left">PRO OLISH</div>
     <div class="sec-title reveal" style="transition-delay:0.1s">To'lov qilish<br>juda oddiy</div>
   </div>
-  <div class="bank-card reveal-scale" style="transition-delay:0.2s">
+  <div class="bank-card lg-card reveal-scale" style="transition-delay:0.2s">
     <div class="bc-shine"></div>
     <div class="chip"></div>
     <div class="card-num">9860 3501 4876 2387</div>
@@ -610,41 +543,196 @@ body{background:#0a0a18}
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     <span>Karta raqamini nusxalab, bank ilovangiz orqali o'tkazing</span>
   </div>
-  <button class="ios-btn reveal" style="transition-delay:0.45s" onclick="ctg()">👑 PRO olish — 349 000 so'm</button>
+  <button class="ios-btn lg-card reveal" style="transition-delay:0.45s" onclick="ctg()">👑 PRO olish — 349 000 so'm</button>
 </div>
 
-<!-- S6: CTA -->
+<!-- S6 -->
 <div class="slide s6">
   <div class="cta-rings reveal-scale">
     <div class="cr"></div><div class="cr"></div><div class="cr"></div>
-    <div class="cta-icon">
+    <div class="cta-icon-box">
       <svg viewBox="0 0 90 90" xmlns="http://www.w3.org/2000/svg">
-        <rect x="16" y="16" width="58" height="58" rx="11" ry="11"
-              transform="rotate(45 45 45)"
-              fill="rgba(255,255,255,0.88)"/>
-        <ellipse cx="45" cy="28" rx="7.5" ry="8.5" fill="#1a1a3a"/>
-        <path d="M32 54 C32 41 58 41 58 54 L58 52 C58 39 32 39 32 52 Z" fill="#1a1a3a"/>
-        <text x="45" y="66" text-anchor="middle"
-              font-family="-apple-system,BlinkMacSystemFont,sans-serif"
-              font-size="8" font-weight="800" fill="#1a1a3a" letter-spacing="0.5">LEGIST</text>
-        <text x="45" y="74" text-anchor="middle"
-              font-family="-apple-system,BlinkMacSystemFont,sans-serif"
-              font-size="8" font-weight="800" fill="#1a1a3a" letter-spacing="0.5">MAN</text>
-        <path d="M63 33 L69 37 L63 41" fill="none" stroke="#1a1a3a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M60 37 L66 41 L60 45" fill="none" stroke="#1a1a3a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="15" y="15" width="60" height="60" rx="11" ry="11" transform="rotate(45 45 45)" fill="rgba(255,255,255,0.9)"/>
+        <ellipse cx="45" cy="28" rx="7.5" ry="8.5" fill="#16163a"/>
+        <path d="M31 53 C31 40 59 40 59 53 L59 51 C59 38 31 38 31 51 Z" fill="#16163a"/>
+        <text x="45" y="66" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="8" font-weight="800" fill="#16163a" letter-spacing="0.4">LEGIST</text>
+        <text x="45" y="74" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="8" font-weight="800" fill="#16163a" letter-spacing="0.4">MAN</text>
+        <path d="M62 33 L68 37 L62 41" fill="none" stroke="#16163a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M59 38 L65 42 L59 46" fill="none" stroke="#16163a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </div>
   </div>
   <div class="cta-title reveal" style="transition-delay:0.15s">BMBA imtihoniga<br><span>mukammal</span><br>tayyorlanishga taylormi?</div>
   <p class="cta-sub reveal" style="transition-delay:0.25s">Har kun 1 ta variant — bilimingizni<br>tizimli oshirib boring.<br>Mukammal natija — muntazam mashqdan.</p>
-  <button class="cta-btn reveal" style="transition-delay:0.35s" onclick="ctg()">👑 PRO obuna olish</button>
-  <button class="cta-ghost reveal" style="transition-delay:0.4s" onclick="ctg()">🆓 Bepul boshlash</button>
+  <button class="cta-btn lg-card reveal" style="transition-delay:0.35s" onclick="ctg()">👑 PRO obuna olish</button>
+  <button class="cta-ghost lg-card reveal" style="transition-delay:0.4s" onclick="ctg()">🆓 Bepul boshlash</button>
   <div class="cta-note reveal" style="transition-delay:0.45s">@legistman_bot · @legistman kanali</div>
 </div>
 
 </div>
+
 <script>
-if(window.Telegram&&window.Telegram.WebApp){Telegram.WebApp.ready();Telegram.WebApp.expand();}
+// ═══════════════════════════════════════════════
+//  1. WebGL ANIMATED BACKGROUND
+// ═══════════════════════════════════════════════
+(function(){
+  var c=document.getElementById('glc');
+  var gl=c.getContext('webgl')||c.getContext('experimental-webgl');
+  if(!gl){
+    // fallback CSS gradient
+    c.style.display='none';
+    document.body.style.background='linear-gradient(155deg,#0c1828,#160826,#1e0a1a)';
+    return;
+  }
+  function resize(){c.width=window.innerWidth;c.height=window.innerHeight;gl.viewport(0,0,c.width,c.height);}
+  window.addEventListener('resize',resize);resize();
+
+  var VS=`attribute vec2 a;void main(){gl_Position=vec4(a,0,1);}`;
+  var FS=`
+precision mediump float;
+uniform float t;uniform vec2 res;
+void main(){
+  vec2 uv=gl_FragCoord.xy/res;
+  // animated blobs
+  float b1=sin(uv.x*2.8+t*0.38)*0.5+0.5;
+  float b2=cos(uv.y*2.2+t*0.29)*0.5+0.5;
+  float b3=sin((uv.x+uv.y)*1.9+t*0.21)*0.5+0.5;
+  float b4=cos(uv.x*1.6-t*0.17)*0.5+0.5;
+  vec3 c1=vec3(0.05,0.12,0.55)*b1;
+  vec3 c2=vec3(0.38,0.06,0.52)*b2;
+  vec3 c3=vec3(0.04,0.28,0.62)*b3;
+  vec3 c4=vec3(0.52,0.06,0.30)*b4;
+  vec3 col=c1+c2*0.7+c3*0.5+c4*0.45;
+  col=col/(col+vec3(0.8));
+  col=mix(vec3(0.03,0.03,0.1),col,0.85);
+  gl_FragColor=vec4(col,1.0);
+}`;
+  function sh(t,src){var s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);return s;}
+  var prog=gl.createProgram();
+  gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));
+  gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));
+  gl.linkProgram(prog);gl.useProgram(prog);
+  var buf=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+  var al=gl.getAttribLocation(prog,'a');
+  gl.enableVertexAttribArray(al);
+  gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
+  var tLoc=gl.getUniformLocation(prog,'t');
+  var rLoc=gl.getUniformLocation(prog,'res');
+  var start=performance.now();
+  function frame(){
+    var elapsed=(performance.now()-start)/1000;
+    gl.uniform1f(tLoc,elapsed);
+    gl.uniform2f(rLoc,c.width,c.height);
+    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+
+// ═══════════════════════════════════════════════
+//  2. RIPPLE CANVAS — touch wave effect
+// ═══════════════════════════════════════════════
+(function(){
+  var c=document.getElementById('rpc');
+  var ctx=c.getContext('2d');
+  var ripples=[];
+  function resize(){c.width=window.innerWidth;c.height=window.innerHeight;}
+  window.addEventListener('resize',resize);resize();
+
+  function addRipple(x,y,color){
+    ripples.push({x:x,y:y,r:0,maxR:Math.min(c.width,c.height)*0.45,
+      alpha:0.55,color:color||'255,255,255',speed:3.2});
+  }
+
+  // Listen on document for all touches
+  document.addEventListener('touchstart',function(e){
+    var t=e.touches[0];
+    addRipple(t.clientX,t.clientY,'255,255,255');
+  },{passive:true});
+  document.addEventListener('mousedown',function(e){
+    addRipple(e.clientX,e.clientY,'255,255,255');
+  });
+
+  function frame(){
+    ctx.clearRect(0,0,c.width,c.height);
+    ripples=ripples.filter(function(rp){
+      rp.r+=rp.speed;
+      rp.alpha*=0.965;
+      if(rp.alpha<0.003||rp.r>rp.maxR)return false;
+      // outer ring
+      ctx.beginPath();
+      ctx.arc(rp.x,rp.y,rp.r,0,Math.PI*2);
+      ctx.strokeStyle='rgba('+rp.color+','+rp.alpha+')';
+      ctx.lineWidth=1.5;
+      ctx.stroke();
+      // inner soft glow
+      if(rp.r<80){
+        var g=ctx.createRadialGradient(rp.x,rp.y,0,rp.x,rp.y,rp.r);
+        g.addColorStop(0,'rgba('+rp.color+','+(rp.alpha*0.18)+')');
+        g.addColorStop(1,'rgba('+rp.color+',0)');
+        ctx.beginPath();
+        ctx.arc(rp.x,rp.y,rp.r,0,Math.PI*2);
+        ctx.fillStyle=g;ctx.fill();
+      }
+      return true;
+    });
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+
+// ═══════════════════════════════════════════════
+//  3. LIQUID GLASS — touch distortion on cards
+// ═══════════════════════════════════════════════
+(function(){
+  document.querySelectorAll('.lg-card').forEach(function(card){
+    function onStart(e){
+      var rect=card.getBoundingClientRect();
+      var touch=e.touches?e.touches[0]:e;
+      var x=((touch.clientX-rect.left)/rect.width*100).toFixed(1)+'%';
+      var y=((touch.clientY-rect.top)/rect.height*100).toFixed(1)+'%';
+      card.style.setProperty('--tx',x);
+      card.style.setProperty('--ty',y);
+      card.classList.add('touched','pressed');
+      // shimmer
+      card.classList.remove('shimmer');
+      void card.offsetWidth; // reflow
+      card.classList.add('shimmer');
+    }
+    function onEnd(){
+      card.classList.remove('pressed');
+      setTimeout(function(){card.classList.remove('touched');},400);
+    }
+    card.addEventListener('touchstart',onStart,{passive:true});
+    card.addEventListener('touchend',onEnd);
+    card.addEventListener('mousedown',onStart);
+    card.addEventListener('mouseup',onEnd);
+    card.addEventListener('mouseleave',onEnd);
+    // move highlight while dragging
+    card.addEventListener('touchmove',function(e){
+      var rect=card.getBoundingClientRect();
+      var touch=e.touches[0];
+      var x=((touch.clientX-rect.left)/rect.width*100).toFixed(1)+'%';
+      var y=((touch.clientY-rect.top)/rect.height*100).toFixed(1)+'%';
+      card.style.setProperty('--tx',x);
+      card.style.setProperty('--ty',y);
+    },{passive:true});
+    card.addEventListener('mousemove',function(e){
+      var rect=card.getBoundingClientRect();
+      var x=((e.clientX-rect.left)/rect.width*100).toFixed(1)+'%';
+      var y=((e.clientY-rect.top)/rect.height*100).toFixed(1)+'%';
+      card.style.setProperty('--tx',x);
+      card.style.setProperty('--ty',y);
+      card.classList.add('touched');
+    });
+  });
+})();
+
+// ═══════════════════════════════════════════════
+//  4. APP LOGIC (dots, slides, typing, counters)
+// ═══════════════════════════════════════════════
 function ctg(){if(window.Telegram&&window.Telegram.WebApp)Telegram.WebApp.close();}
 
 var total=6,de=document.getElementById('dots');
@@ -652,20 +740,18 @@ for(var i=0;i<total;i++){var d=document.createElement('div');d.className='dot'+(
 
 function cnt(el,target,suf,dur){
   var v=0,step=target/60;
-  var t=setInterval(function(){v+=step;if(v>=target){v=target;clearInterval(t);}
-    el.textContent=Math.floor(v)+(suf||'');
-  },dur/60);
+  var tm=setInterval(function(){v+=step;if(v>=target){v=target;clearInterval(tm);}
+    el.textContent=Math.floor(v)+(suf||'');},dur/60);
 }
 
-// typing animation
 var lines=['BMBA imtihoniga\n','mukammal\n','tayyorlanish uchun'];
-var el=document.getElementById('ht'),li=0,ci=0,txt='';
+var htEl=document.getElementById('ht'),li=0,ci=0,txt='';
 function type(){
-  if(li>=lines.length){el.innerHTML=txt+'<span class="cursor"></span>';return;}
+  if(li>=lines.length){htEl.innerHTML=txt+'<span class="cursor"></span>';return;}
   if(ci<lines[li].length){
     var ch=lines[li][ci];
-    if(ch==='\n'){txt+='<br>';}else{txt+=ch;}
-    ci++;el.innerHTML=txt+'<span class="cursor"></span>';
+    txt+=(ch==='\n'?'<br>':ch);
+    ci++;htEl.innerHTML=txt+'<span class="cursor"></span>';
     setTimeout(type,Math.random()*50+30);
   } else{li++;ci=0;setTimeout(type,180);}
 }
@@ -696,12 +782,10 @@ var obs=new IntersectionObserver(function(entries){
 slides.forEach(function(s){obs.observe(s);});
 
 setTimeout(function(){
-  document.querySelector('.slide').querySelectorAll('.reveal,.reveal-left,.reveal-scale').forEach(function(r,i){
-    setTimeout(function(){r.classList.add('shown');},80+i*42);
-  });
-  document.querySelectorAll('.s1 [data-count]').forEach(function(c){
-    setTimeout(function(){cnt(c,parseInt(c.dataset.count),c.dataset.suf||'',1500);},800);
-  });
+  document.querySelector('.slide').querySelectorAll('.reveal,.reveal-left,.reveal-scale')
+    .forEach(function(r,i){setTimeout(function(){r.classList.add('shown');},80+i*42);});
+  document.querySelectorAll('.s1 [data-count],.slide:first-child [data-count]')
+    .forEach(function(c){setTimeout(function(){cnt(c,parseInt(c.dataset.count),c.dataset.suf||'',1500);},800);});
   revealed[0]=true;
   setTimeout(type,900);
 },150);
