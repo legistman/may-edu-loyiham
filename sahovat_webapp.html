@@ -15,32 +15,13 @@ html,body{
   -webkit-font-smoothing:antialiased;
 }
 
-/* ── ANIMATED GRADIENT BACKGROUND (always visible) ── */
-body{
-  background:#0d0d1a;
-  position:relative;
-}
-#bg-canvas{
-  position:fixed;inset:0;z-index:0;
-  background:linear-gradient(160deg,#0b1e2d 0%,#0e1628 25%,#1a0e2e 50%,#2a0e1a 75%,#0e1e14 100%);
-}
-#bg-canvas::before{
-  content:'';position:absolute;inset:0;
-  background:
-    radial-gradient(ellipse 60% 50% at 20% 20%, rgba(30,90,180,0.55) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 60% at 80% 70%, rgba(160,60,180,0.45) 0%, transparent 65%),
-    radial-gradient(ellipse 40% 40% at 60% 30%, rgba(80,140,220,0.35) 0%, transparent 60%),
-    radial-gradient(ellipse 55% 45% at 30% 80%, rgba(200,80,120,0.35) 0%, transparent 65%),
-    radial-gradient(ellipse 35% 35% at 70% 10%, rgba(100,200,160,0.25) 0%, transparent 60%);
-  animation:bgmove 12s ease-in-out infinite alternate;
-}
-@keyframes bgmove{
-  0%{filter:hue-rotate(0deg) brightness(1)}
-  100%{filter:hue-rotate(20deg) brightness(1.08)}
-}
+/* ── BACKGROUND ── */
+body{background:#08091a}
+#glc{position:fixed;inset:0;z-index:0;width:100%;height:100%}
+#rpc{position:fixed;inset:0;z-index:2;pointer-events:none;width:100%;height:100%}
 
 /* ── SLIDES ── */
-.slides{position:relative;z-index:1;width:100%;height:100vh;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch}
+.slides{position:relative;z-index:3;width:100%;height:100vh;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch}
 .slides::-webkit-scrollbar{display:none}
 .slide{min-height:100vh;scroll-snap-align:start;position:relative;display:flex;flex-direction:column;overflow:hidden}
 
@@ -63,45 +44,36 @@ body{
 .reveal-scale{opacity:0;transform:scale(0.88);transition:opacity 0.5s ease,transform 0.5s cubic-bezier(.34,1.56,.64,1)}
 .reveal-scale.shown{opacity:1;transform:scale(1)}
 
-/* ──────────────────────────────────────
-   LIQUID GLASS COMPONENTS
-   iOS 26 style: thick blur + white tint
-   + specular top border + subtle shadow
-─────────────────────────────────────── */
+/* ── LIQUID GLASS — touch interactive ── */
 .lg-card{
-  background:rgba(255,255,255,0.11);
-  backdrop-filter:blur(40px) saturate(200%) brightness(1.1);
-  -webkit-backdrop-filter:blur(40px) saturate(200%) brightness(1.1);
-  border:1px solid rgba(255,255,255,0.22);
-  border-bottom-color:rgba(255,255,255,0.08);
-  border-radius:22px;
-  box-shadow:
-    0 2px 0 0 rgba(255,255,255,0.18) inset,
-    0 -1px 0 0 rgba(0,0,0,0.12) inset,
-    0 8px 32px rgba(0,0,0,0.28),
-    0 1px 0 rgba(255,255,255,0.06);
-}
-.lg-card-sm{
+  position:relative;overflow:hidden;
   background:rgba(255,255,255,0.1);
-  backdrop-filter:blur(32px) saturate(180%) brightness(1.08);
-  -webkit-backdrop-filter:blur(32px) saturate(180%) brightness(1.08);
-  border:1px solid rgba(255,255,255,0.18);
+  backdrop-filter:blur(44px) saturate(200%) brightness(1.12);
+  -webkit-backdrop-filter:blur(44px) saturate(200%) brightness(1.12);
+  border:1px solid rgba(255,255,255,0.2);
   border-bottom-color:rgba(255,255,255,0.07);
-  border-radius:18px;
-  box-shadow:
-    0 1.5px 0 0 rgba(255,255,255,0.15) inset,
-    0 6px 24px rgba(0,0,0,0.22);
+  border-radius:22px;
+  box-shadow:0 2px 0 rgba(255,255,255,0.16) inset,0 8px 32px rgba(0,0,0,0.28);
+  transition:transform 0.18s cubic-bezier(.34,1.56,.64,1),box-shadow 0.18s ease;
+  cursor:pointer;
 }
-.lg-tinted{
-  backdrop-filter:blur(36px) saturate(180%);
-  -webkit-backdrop-filter:blur(36px) saturate(180%);
-  border:1px solid rgba(255,255,255,0.18);
-  border-bottom-color:rgba(255,255,255,0.06);
-  border-radius:20px;
-  box-shadow:
-    0 2px 0 0 rgba(255,255,255,0.14) inset,
-    0 8px 28px rgba(0,0,0,0.25);
+.lg-card::before{
+  content:'';position:absolute;inset:0;border-radius:inherit;
+  background:radial-gradient(circle at var(--tx,50%) var(--ty,0%),
+    rgba(255,255,255,0.2) 0%,transparent 65%);
+  opacity:0;transition:opacity 0.4s ease;pointer-events:none;z-index:1;
 }
+.lg-card.touched::before{opacity:1}
+.lg-card.pressed{
+  transform:scale(0.975);
+  box-shadow:0 1px 0 rgba(255,255,255,0.12) inset,0 4px 16px rgba(0,0,0,0.35);
+}
+.lg-card::after{
+  content:'';position:absolute;top:0;left:-120%;width:60%;height:100%;
+  background:linear-gradient(105deg,transparent,rgba(255,255,255,0.13),transparent);
+  transform:skewX(-20deg);pointer-events:none;z-index:2;transition:left 0s;
+}
+.lg-card.shimmer::after{left:160%;transition:left 0.5s ease}
 
 /* ──────────────────
    S1  HERO
@@ -496,7 +468,8 @@ body{
 </style>
 </head>
 <body>
-<div id="bg-canvas"></div>
+<canvas id="glc"></canvas>
+<canvas id="rpc"></canvas>
 <script>if(window.Telegram&&window.Telegram.WebApp){Telegram.WebApp.ready();Telegram.WebApp.expand();}</script>
 <div class="gpb" id="gpb"></div>
 <div class="dots" id="dots"></div>
@@ -534,19 +507,19 @@ body{
     <div class="sec-sub reveal" style="transition-delay:0.15s">Har bir tiyinda katta ma'no bor</div>
   </div>
   <div class="why-list">
-    <div class="why-card reveal" style="transition-delay:0.2s">
+    <div class="lg-card why-card reveal" style="transition-delay:0.2s">
       <div class="why-icon">❤️</div>
       <div><div class="why-name">Birovning hayotiga nur</div><div class="why-desc">Og'ir betob bolalar va mehribonlik uyidagilarga bevosita yordam</div><span class="why-tag">50% — Xayriya</span></div>
     </div>
-    <div class="why-card reveal" style="transition-delay:0.25s">
+    <div class="lg-card why-card reveal" style="transition-delay:0.25s">
       <div class="why-icon">📖</div>
       <div><div class="why-name">Ilm oling, savob qiling</div><div class="why-desc">Sifatli qo'llanma olish bilan birga ezgu ishga sababchi bo'ling</div><span class="why-tag">Bir vaqtda ikki xayrli ish</span></div>
     </div>
-    <div class="why-card reveal" style="transition-delay:0.3s">
+    <div class="lg-card why-card reveal" style="transition-delay:0.3s">
       <div class="why-icon">🤍</div>
       <div><div class="why-name">Faqat ehson ham bo'ladi</div><div class="why-desc">Qo'llanmasiz, sof niyat bilan — 100% to'liq xayriya bo'ladi</div><span class="why-tag">100% — Xayriya</span></div>
     </div>
-    <div class="why-card reveal" style="transition-delay:0.35s">
+    <div class="lg-card why-card reveal" style="transition-delay:0.35s">
       <div class="why-icon">📊</div>
       <div><div class="why-name">Har hafta hisobot</div><div class="why-desc">Pulingiz qayerga ketgani — har juma kanalda ochiq ko'rsatiladi</div><span class="why-tag">Shaffof tizim</span></div>
     </div>
@@ -560,7 +533,7 @@ body{
     <div class="sec-title reveal" style="transition-delay:0.1s">Qanday niyat bilan<br>sahovat qilasiz?</div>
     <div class="sec-sub reveal" style="transition-delay:0.15s">Pul taqsimoti bunga qarab aniqlanadi</div>
   </div>
-  <div class="niyat-card reveal" style="transition-delay:0.2s">
+  <div class="lg-card niyat-card reveal" style="transition-delay:0.2s">
     <div class="niyat-top">
       <div class="niyat-icon">📖</div>
       <div><div class="niyat-name">Qo'llanma uchun</div><div class="niyat-desc">Qo'llanma olib, savobga sherik bo'lish</div></div>
@@ -568,7 +541,7 @@ body{
     <div class="niyat-div"></div>
     <div class="niyat-pills"><span class="npill">50% — Ehson</span><span class="npill">50% — Qalam haqi</span></div>
   </div>
-  <div class="niyat-card reveal" style="transition-delay:0.25s">
+  <div class="lg-card niyat-card reveal" style="transition-delay:0.25s">
     <div class="niyat-top">
       <div class="niyat-icon">❤️</div>
       <div><div class="niyat-name">Faqat ehson</div><div class="niyat-desc">Sof niyat — hech qanday manfaat kutmasdan</div></div>
@@ -588,10 +561,10 @@ body{
     <div class="sec-title reveal" style="transition-delay:0.1s">Istalgan miqdor —<br>o'zingiz belgilaysiz</div>
   </div>
   <div class="amount-grid">
-    <div class="amount-btn reveal" style="transition-delay:0.15s"><div class="amt-num">5 000</div><div class="amt-lbl">so'm</div></div>
-    <div class="amount-btn reveal" style="transition-delay:0.18s"><div class="amt-num">10 000</div><div class="amt-lbl">so'm</div></div>
-    <div class="amount-btn selected reveal" style="transition-delay:0.21s"><div class="amt-num">20 000</div><div class="amt-lbl">so'm</div></div>
-    <div class="amount-btn reveal" style="transition-delay:0.24s"><div class="amt-num">50 000</div><div class="amt-lbl">so'm</div></div>
+    <div class="lg-card amount-btn reveal" style="transition-delay:0.15s"><div class="amt-num">5 000</div><div class="amt-lbl">so'm</div></div>
+    <div class="lg-card amount-btn reveal" style="transition-delay:0.18s"><div class="amt-num">10 000</div><div class="amt-lbl">so'm</div></div>
+    <div class="lg-card amount-btn selected reveal" style="transition-delay:0.21s"><div class="amt-num">20 000</div><div class="amt-lbl">so'm</div></div>
+    <div class="lg-card amount-btn reveal" style="transition-delay:0.24s"><div class="amt-num">50 000</div><div class="amt-lbl">so'm</div></div>
   </div>
   <div class="custom-input reveal" style="transition-delay:0.28s">
     <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -611,7 +584,7 @@ body{
     <div class="sec-label reveal-left">TO'LOV</div>
     <div class="sec-title reveal" style="transition-delay:0.1s">Kartaga o'tkazing,<br>chekni yuboring</div>
   </div>
-  <div class="bank-card reveal-scale" style="transition-delay:0.2s">
+  <div class="lg-card bank-card reveal-scale" style="transition-delay:0.2s">
     <div class="bcard-shine"></div>
     <div class="chip"></div>
     <div class="card-num">9860 3501 4876 2387</div>
@@ -628,7 +601,7 @@ body{
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     <span>Karta raqamini nusxalab bank ilovangiz orqali o'tkazing. O'tkazgach chek screenshotini yuboring.</span>
   </div>
-  <button class="ios-btn reveal" style="transition-delay:0.4s">📸 Chekni yuborish</button>
+  <button class="lg-card ios-btn reveal" style="transition-delay:0.4s">📸 Chekni yuborish</button>
 </div>
 
 <!-- S6 HISOBOT -->
@@ -669,14 +642,103 @@ body{
   </div>
   <div class="cta-title reveal" style="transition-delay:0.15s">Yaxshilikka<br><span>sababchi</span><br>bo'lasizmi?</div>
   <p class="cta-sub reveal" style="transition-delay:0.25s">Kichkina yaxshilik ham Alloh oldida<br>katta amal bo'lishi mumkin.<br>Niyat qiling, sahovat qiling.</p>
-  <button class="cta-btn reveal" style="transition-delay:0.35s" onclick="ctg()">🤲 Sahovat qilish</button>
-  <button class="cta-ghost reveal" style="transition-delay:0.4s" onclick="ctg()">📊 Hisobotni ko'rish</button>
+  <button class="lg-card cta-btn reveal" style="transition-delay:0.35s" onclick="ctg()">🤲 Sahovat qilish</button>
+  <button class="lg-card cta-ghost reveal" style="transition-delay:0.4s" onclick="ctg()">📊 Hisobotni ko'rish</button>
   <div class="cta-note reveal" style="transition-delay:0.45s">Har juma kanalda hisobot chop etiladi<br>@legistman · @legistman_bot</div>
 </div>
 
 </div>
 <script>
 if(window.Telegram&&window.Telegram.WebApp){Telegram.WebApp.ready();Telegram.WebApp.expand();}
+
+// ═══════════════════════════════════════
+//  1. WebGL ANIMATED BACKGROUND
+// ═══════════════════════════════════════
+(function(){
+  var c=document.getElementById('glc');
+  var gl=c.getContext('webgl')||c.getContext('experimental-webgl');
+  if(!gl){c.style.display='none';document.body.style.background='linear-gradient(155deg,#0b1e2d,#1a0e2e,#0e1e14)';return;}
+  function resize(){c.width=window.innerWidth;c.height=window.innerHeight;gl.viewport(0,0,c.width,c.height);}
+  window.addEventListener('resize',resize);resize();
+  var VS='attribute vec2 a;void main(){gl_Position=vec4(a,0,1);}';
+  var FS='precision mediump float;uniform float t;uniform vec2 res;void main(){vec2 uv=gl_FragCoord.xy/res;float b1=sin(uv.x*2.6+t*0.35)*0.5+0.5;float b2=cos(uv.y*2.1+t*0.27)*0.5+0.5;float b3=sin((uv.x+uv.y)*1.8+t*0.19)*0.5+0.5;float b4=cos(uv.x*1.5-t*0.15)*0.5+0.5;vec3 c1=vec3(0.04,0.18,0.52)*b1;vec3 c2=vec3(0.35,0.05,0.48)*b2;vec3 c3=vec3(0.03,0.32,0.18)*b3;vec3 c4=vec3(0.48,0.05,0.28)*b4;vec3 col=c1+c2*0.7+c3*0.5+c4*0.4;col=col/(col+vec3(0.8));col=mix(vec3(0.03,0.03,0.09),col,0.85);gl_FragColor=vec4(col,1.0);}';
+  function sh(tp,src){var s=gl.createShader(tp);gl.shaderSource(s,src);gl.compileShader(s);return s;}
+  var prog=gl.createProgram();
+  gl.attachShader(prog,sh(gl.VERTEX_SHADER,VS));
+  gl.attachShader(prog,sh(gl.FRAGMENT_SHADER,FS));
+  gl.linkProgram(prog);gl.useProgram(prog);
+  var buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+  var al=gl.getAttribLocation(prog,'a');gl.enableVertexAttribArray(al);gl.vertexAttribPointer(al,2,gl.FLOAT,false,0,0);
+  var tL=gl.getUniformLocation(prog,'t'),rL=gl.getUniformLocation(prog,'res');
+  var s0=performance.now();
+  function frame(){var e=(performance.now()-s0)/1000;gl.uniform1f(tL,e);gl.uniform2f(rL,c.width,c.height);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);requestAnimationFrame(frame);}
+  frame();
+})();
+
+// ═══════════════════════════════════════
+//  2. RIPPLE CANVAS
+// ═══════════════════════════════════════
+(function(){
+  var c=document.getElementById('rpc'),ctx=c.getContext('2d'),rips=[];
+  function resize(){c.width=window.innerWidth;c.height=window.innerHeight;}
+  window.addEventListener('resize',resize);resize();
+  function add(x,y){rips.push({x:x,y:y,r:0,maxR:Math.min(c.width,c.height)*0.45,alpha:0.55,speed:3.2});}
+  document.addEventListener('touchstart',function(e){var t=e.touches[0];add(t.clientX,t.clientY);},{passive:true});
+  document.addEventListener('mousedown',function(e){add(e.clientX,e.clientY);});
+  function frame(){
+    ctx.clearRect(0,0,c.width,c.height);
+    rips=rips.filter(function(r){
+      r.r+=r.speed;r.alpha*=0.965;
+      if(r.alpha<0.003||r.r>r.maxR)return false;
+      ctx.beginPath();ctx.arc(r.x,r.y,r.r,0,Math.PI*2);
+      ctx.strokeStyle='rgba(255,255,255,'+r.alpha+')';ctx.lineWidth=1.5;ctx.stroke();
+      if(r.r<80){var g=ctx.createRadialGradient(r.x,r.y,0,r.x,r.y,r.r);
+        g.addColorStop(0,'rgba(255,255,255,'+(r.alpha*0.18)+')');g.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.beginPath();ctx.arc(r.x,r.y,r.r,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();}
+      return true;
+    });
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
+
+// ═══════════════════════════════════════
+//  3. LIQUID GLASS TOUCH
+// ═══════════════════════════════════════
+(function(){
+  document.querySelectorAll('.lg-card').forEach(function(card){
+    function onStart(e){
+      var rect=card.getBoundingClientRect();
+      var touch=e.touches?e.touches[0]:e;
+      card.style.setProperty('--tx',((touch.clientX-rect.left)/rect.width*100).toFixed(1)+'%');
+      card.style.setProperty('--ty',((touch.clientY-rect.top)/rect.height*100).toFixed(1)+'%');
+      card.classList.add('touched','pressed');
+      card.classList.remove('shimmer');void card.offsetWidth;card.classList.add('shimmer');
+    }
+    function onEnd(){card.classList.remove('pressed');setTimeout(function(){card.classList.remove('touched');},400);}
+    card.addEventListener('touchstart',onStart,{passive:true});
+    card.addEventListener('touchend',onEnd);
+    card.addEventListener('mousedown',onStart);
+    card.addEventListener('mouseup',onEnd);
+    card.addEventListener('mouseleave',onEnd);
+    card.addEventListener('touchmove',function(e){
+      var rect=card.getBoundingClientRect(),touch=e.touches[0];
+      card.style.setProperty('--tx',((touch.clientX-rect.left)/rect.width*100).toFixed(1)+'%');
+      card.style.setProperty('--ty',((touch.clientY-rect.top)/rect.height*100).toFixed(1)+'%');
+    },{passive:true});
+    card.addEventListener('mousemove',function(e){
+      var rect=card.getBoundingClientRect();
+      card.style.setProperty('--tx',((e.clientX-rect.left)/rect.width*100).toFixed(1)+'%');
+      card.style.setProperty('--ty',((e.clientY-rect.top)/rect.height*100).toFixed(1)+'%');
+      card.classList.add('touched');
+    });
+  });
+})();
+
+// ═══════════════════════════════════════
+//  4. APP LOGIC
+// ═══════════════════════════════════════
 function ctg(){if(window.Telegram&&window.Telegram.WebApp)Telegram.WebApp.close();}
 
 var total=7,de=document.getElementById('dots');
