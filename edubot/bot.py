@@ -575,19 +575,16 @@ async def sahovat_edit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE
     parts  = q.data.split("_")  # sah_edit_PAYID_UID
     pay_id = int(parts[2])
     uid    = int(parts[3])
-    context.user_data["step"]            = "sah_admin_edit_amount"
-    context.user_data["edit_pay_id"]     = pay_id
-    context.user_data["edit_pay_uid"]    = uid
-    context.user_data["edit_msg_id"]     = q.message.message_id
-    context.user_data["edit_msg_caption"]= q.message.caption or q.message.text or ""
+    context.user_data["step"]             = "sah_admin_edit_amount"
+    context.user_data["edit_pay_id"]      = pay_id
+    context.user_data["edit_pay_uid"]     = uid
+    context.user_data["edit_msg_id"]      = q.message.message_id
+    context.user_data["edit_msg_caption"] = q.message.caption or q.message.text or ""
+    await q.answer()
     await context.bot.send_message(
         q.from_user.id,
         f"✏️ To'lov #{pay_id} uchun haqiqiy miqdorni yozing (so'mda):\n\n"
         f"Masalan: 20 000\n\nBekor: /admin")
-    q = update.callback_query; await q.answer()
-    context.user_data["step"] = "waiting_proof"
-    await q.edit_message_text(
-        "📸 To'lov chekini yuboring (rasm yoki fayl).\n\nBekor: /start")
 
 async def payment_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
@@ -1755,183 +1752,316 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
 #  MATN XABARLARI
 # ═══════════════════════════════════════════════════════
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text: return
     uid  = update.effective_user.id
     step = context.user_data.get("step","")
     txt  = (update.message.text or "").strip()
 
-    # Admin donor miqdorini hisobotdan tahrirlash
-    if step == "sah_donor_edit_amount" and is_admin(uid):
-        pay_id = context.user_data.get("edit_pay_id")
-        context.user_data.clear()
-        db.update_sahovat_amount(pay_id, txt)
-        await update.message.reply_text(
-            f"✅ #{pay_id} donor miqdori {txt} so'm ga yangilandi!",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("📊 Hisobotga qaytish", callback_data="adm_sah_report")],
-            ]))
-        return
-        pay_id  = context.user_data.get("edit_pay_id")
-        pay_uid = context.user_data.get("edit_pay_uid")
-        msg_id  = context.user_data.get("edit_msg_id")
-        old_cap = context.user_data.get("edit_msg_caption","")
-        context.user_data.clear()
-        # Bazada miqdorni yangilash
-        db.conn.execute("UPDATE sahovat_payments SET amount=? WHERE id=?", (txt, pay_id))
-        db.conn.commit()
-        # Admin xabarini yangilash
-        new_cap = old_cap
-        if "Miqdor:" in old_cap:
-            import re
-            new_cap = re.sub(r"💰 Miqdor:.*", f"💰 Miqdor: {txt} so'm ✏️", old_cap)
-        else:
-            new_cap = old_cap + f"\n💰 Miqdor: {txt} so'm ✏️"
-        kb = [
-            [InlineKeyboardButton("✅ Tasdiqlash",          callback_data=f"sah_ok_{pay_id}_{pay_uid}"),
-             InlineKeyboardButton("❌ Rad etish",           callback_data=f"sah_no_{pay_id}_{pay_uid}")],
-            [InlineKeyboardButton("✏️ Miqdorni tahrirlash", callback_data=f"sah_edit_{pay_id}_{pay_uid}")],
-        ]
-        try:
-            await context.bot.edit_message_caption(
-                chat_id=ADMIN_ID, message_id=msg_id,
-                caption=new_cap,
-                reply_markup=InlineKeyboardMarkup(kb))
-        except:
+    # ── ADMIN steplari — kanaldan mustaqil ──────────────────────────────
+    if is_admin(uid):
+        if step == "sah_donor_edit_amount":
+            pay_id = context.user_data.get("edit_pay_id")
+            context.user_data.clear()
+            db.update_sahovat_amount(pay_id, txt)
+            await update.message.reply_text(
+                f"✅ #{pay_id} donor miqdori {txt} so'm ga yangilandi!",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📊 Hisobotga qaytish", callback_data="adm_sah_report")],
+                ]))
+            return
+
+        if step == "sah_admin_edit_amount":
+            pay_id  = context.user_data.get("edit_pay_id")
+            pay_uid = context.user_data.get("edit_pay_uid")
+            msg_id  = context.user_data.get("edit_msg_id")
+            old_cap = context.user_data.get("edit_msg_caption","")
+            context.user_data.clear()
+            db.conn.execute("UPDATE sahovat_payments SET amount=? WHERE id=?", (txt, pay_id))
+            db.conn.commit()
+            new_cap = re.sub(r"💰 Miqdor:.*", f"💰 Miqdor: {txt} so'm ✏️", old_cap) if "Miqdor:" in old_cap else old_cap + f"\n💰 Miqdor: {txt} so'm ✏️"
+            kb = [
+                [InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"sah_ok_{pay_id}_{pay_uid}"),
+                 InlineKeyboardButton("❌ Rad etish",  callback_data=f"sah_no_{pay_id}_{pay_uid}")],
+                [InlineKeyboardButton("✏️ Miqdorni tahrirlash", callback_data=f"sah_edit_{pay_id}_{pay_uid}")],
+            ]
             try:
-                await context.bot.edit_message_text(
-                    chat_id=ADMIN_ID, message_id=msg_id,
-                    text=new_cap,
-                    reply_markup=InlineKeyboardMarkup(kb))
-            except: pass
-        await update.message.reply_text(
-            f"✅ Miqdor {txt} so'm ga yangilandi!")
-        return
-    if step == "sah_report_period" and is_admin(uid):
-        context.user_data["sah_rep_period"] = txt
-        context.user_data["step"] = "sah_report_total"
-        await update.message.reply_text(
-            f"✅ Davr: {txt}\n\n"
-            f"💰 Jami yig'ilgan summani yozing (so'mda):\n"
-            f"Masalan: 850 000")
-        return
-
-    if step == "sah_report_total" and is_admin(uid):
-        context.user_data["sah_rep_total"] = txt
-        context.user_data["step"] = "sah_report_donors"
-        await update.message.reply_text(
-            f"✅ Jami: {txt} so'm\n\n"
-            f"👥 Sahovat qilganlar sonini yozing:\n"
-            f"Masalan: 12")
-        return
-
-    if step == "sah_report_donors" and is_admin(uid):
-        context.user_data["sah_rep_donors"] = txt
-        context.user_data["step"] = "sah_report_note"
-        await update.message.reply_text(
-            f"✅ Donorlar: {txt} kishi\n\n"
-            f"📝 Qo'shimcha izoh yozing (ixtiyoriy):\n"
-            f"Masalan: Mehribonlik uyi №3 ga o'tkazildi\n\n"
-            f"O'tkazib yuborish uchun — ni yozing")
-        return
-
-    if step == "admin_reply" and is_admin(uid):
-        tid  = context.user_data.get("reply_to_uid")
-        name = context.user_data.get("reply_to_name","")
-        context.user_data.clear()
-        if tid:
-            try:
-                await context.bot.send_message(
-                    tid, f"📬 Admin javobi:\n{'━'*22}\n{txt}")
-                await update.message.reply_text(
-                    f"✅ Javob yuborildi → {name}",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]))
+                await context.bot.edit_message_caption(chat_id=ADMIN_ID, message_id=msg_id, caption=new_cap, reply_markup=InlineKeyboardMarkup(kb))
             except:
-                await update.message.reply_text("❌ Xabar yuborib bo'lmadi.")
-        return
+                try:
+                    await context.bot.edit_message_text(chat_id=ADMIN_ID, message_id=msg_id, text=new_cap, reply_markup=InlineKeyboardMarkup(kb))
+                except: pass
+            await update.message.reply_text(f"✅ Miqdor {txt} so'm ga yangilandi!")
+            return
 
-    if step == "sah_report_note" and is_admin(uid):
-        note   = "" if txt == "-" else txt
-        period = context.user_data.get("sah_rep_period","")
-        total  = context.user_data.get("sah_rep_total","")
-        donors = context.user_data.get("sah_rep_donors","0")
-        try:
-            clean   = total.replace(" ","").replace(",","")
-            val     = int(clean)
-            charity = f"{val//2:,}".replace(",", " ")
-            author  = f"{val//2:,}".replace(",", " ")
-        except:
-            charity = total
-            author  = total
-        db.add_sahovat_report(period, total, charity, author, int(donors) if donors.isdigit() else 0, note)
-        context.user_data.clear()
-        await update.message.reply_text(
-            f"✅ Hisobot saqlandi!\n\n"
-            f"📅 Davr: {period}\n💰 Jami: {total} so'm\n"
-            f"🏥 Ehson: {charity} so'm\n✍️ Qalam haqi: {author} so'm\n"
-            f"👥 Donorlar: {donors} kishi",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("📊 Hisobotlar", callback_data="adm_sah_report")],
-                [InlineKeyboardButton("🔧 Admin",      callback_data="adm_back")],
-            ]))
-        return
-    if step == "waiting_sahovat_custom_amount":
-        context.user_data["sahovat_amount"] = txt
-        context.user_data["step"] = "waiting_sahovat_proof"
-        card  = S("sahovat_card", S("card_number","9860 3501 4876 2387"))
-        owner = S("sahovat_owner", S("card_owner","Mallayev Ozodbek"))
-        niyat = context.user_data.get("sahovat_type","guide")
-        foiz  = "50% xayriya / 50% qalam haqi" if niyat == "guide" else "100% xayriya"
-        await update.message.reply_text(
-            f"✅ Miqdor: {txt} so'm\n"
-            f"💡 Taqsimot: {foiz}\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💳 Kartaga o'tkazing:\n`{card}`\n"
-            f"👤 Egasi: {owner}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"O'tkazib bo'lgach chekni shu yerga yuboring 📸",
-            parse_mode="Markdown")
-        return
-    if step == "sahovat_reply" and is_admin(uid):
-        tid  = context.user_data.get("reply_to_uid")
-        name = context.user_data.get("reply_to_name","")
-        # Agar fayl allaqachon yuborilgan bo'lsa — matnni caption sifatida saqlaymiz
-        # Agar fayl kutilmasa — faqat matn yuboriladi
-        file_id = context.user_data.get("sahovat_reply_file")
-        if file_id:
-            # Fayl bor, matn ham kirdi — ikkalasini yuboramiz
+        if step == "admin_reply":
+            tid  = context.user_data.get("reply_to_uid")
+            name = context.user_data.get("reply_to_name","")
+            context.user_data.clear()
+            if tid:
+                try:
+                    await context.bot.send_message(tid, f"📬 Admin javobi:\n{'━'*22}\n{txt}")
+                    await update.message.reply_text(
+                        f"✅ Javob yuborildi → {name}",
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]))
+                except:
+                    await update.message.reply_text("❌ Xabar yuborib bo'lmadi.")
+            return
+
+        if step == "sahovat_reply":
+            tid      = context.user_data.get("reply_to_uid")
+            name     = context.user_data.get("reply_to_name","")
+            file_id  = context.user_data.get("sahovat_reply_file")
             caption_txt = "" if txt == "." else f"📬 Admin xabari:\n{'━'*22}\n{txt}"
             context.user_data.clear()
             try:
-                await context.bot.send_document(
-                    tid, file_id,
-                    caption=caption_txt or None)
+                if file_id:
+                    await context.bot.send_document(tid, file_id, caption=caption_txt or None)
+                else:
+                    await context.bot.send_message(tid, f"📬 Admin xabari:\n{'━'*22}\n{txt}")
                 await update.message.reply_text(
-                    f"✅ Fayl va xabar yuborildi → {name}",
+                    f"✅ Yuborildi → {name}",
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]))
             except:
                 await update.message.reply_text("❌ Yuborib bo'lmadi.")
-        else:
-            # Faqat matn
-            context.user_data.clear()
-            try:
-                await context.bot.send_message(
-                    tid,
-                    f"📬 Admin xabari:\n{'━'*22}\n{txt}")
-                await update.message.reply_text(
-                    f"✅ Xabar yuborildi → {name}",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]))
-            except:
-                await update.message.reply_text("❌ Yuborib bo'lmadi.")
-        return
+            return
 
-    # Yangi foydalanuvchi ro'yxati
+        if step == "sah_report_period":
+            context.user_data["sah_rep_period"] = txt
+            context.user_data["step"] = "sah_report_total"
+            await update.message.reply_text(f"✅ Davr: {txt}\n\n💰 Jami yig'ilgan summani yozing:\nMasalan: 850 000")
+            return
+
+        if step == "sah_report_total":
+            context.user_data["sah_rep_total"] = txt
+            context.user_data["step"] = "sah_report_donors"
+            await update.message.reply_text(f"✅ Jami: {txt} so'm\n\n👥 Sahovat qilganlar sonini yozing:\nMasalan: 12")
+            return
+
+        if step == "sah_report_donors":
+            context.user_data["sah_rep_donors"] = txt
+            context.user_data["step"] = "sah_report_note"
+            await update.message.reply_text(f"✅ Donorlar: {txt} kishi\n\n📝 Izoh yozing (ixtiyoriy):\n'-' bosing o'tkazib yuborish uchun")
+            return
+
+        if step == "sah_report_note":
+            note   = "" if txt == "-" else txt
+            period = context.user_data.get("sah_rep_period","")
+            total  = context.user_data.get("sah_rep_total","")
+            donors = context.user_data.get("sah_rep_donors","0")
+            try:
+                val     = int(total.replace(" ","").replace(",",""))
+                charity = f"{val//2:,}".replace(",", " ")
+                author  = f"{val - val//2:,}".replace(",", " ")
+            except:
+                charity = total; author = total
+            db.add_sahovat_report(period, total, charity, author, int(donors) if donors.isdigit() else 0, note)
+            context.user_data.clear()
+            await update.message.reply_text(
+                f"✅ Hisobot saqlandi!\n\n📅 {period}\n💰 Jami: {total} so'm\n🏥 Ehson: {charity} so'm\n✍️ Qalam haqi: {author} so'm\n👥 {donors} kishi",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📊 Hisobotlar", callback_data="adm_sah_report")],
+                    [InlineKeyboardButton("🔧 Admin", callback_data="adm_back")],
+                ]))
+            return
+
+        if step == "broadcast":
+            users = db.get_users_by_status(None)
+            sent  = 0
+            for u in users:
+                if u["status"] in ("approved","pro"):
+                    try:
+                        await context.bot.send_message(
+                            u["user_id"], f"📢\n\n{txt}",
+                            reply_markup=InlineKeyboardMarkup([
+                                [InlineKeyboardButton("✍️ Asl ismim bilan qayta ro'yxatdan o'tish", callback_data="re_register")]
+                            ]))
+                        sent += 1
+                    except: pass
+            context.user_data.clear()
+            await update.message.reply_text(f"✅ {sent} ta foydalanuvchiga yuborildi.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]))
+            return
+
+        if step == "admin_reply_all":
+            uid2 = context.user_data.get("reply_all_uid")
+            name = context.user_data.get("reply_all_name","")
+            context.user_data.clear()
+            if uid2:
+                try:
+                    await context.bot.send_message(uid2, f"📬 Admin javobi:\n{'━'*22}\n{txt}")
+                    await update.message.reply_text(f"✅ Yuborildi → {name}",
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]))
+                except:
+                    await update.message.reply_text("❌ Yuborib bo'lmadi.")
+            return
+
+        if step in ("set_sah_card","set_sah_owner","set_sah_percent"):
+            key_map = {"set_sah_card":"sahovat_card","set_sah_owner":"sahovat_owner","set_sah_percent":"sahovat_percent"}
+            db.set_setting(key_map[step], txt)
+            context.user_data.clear()
+            await update.message.reply_text(f"✅ Sahovat sozlamasi yangilandi: {txt}",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ Sozlamalar", callback_data="adm_settings")]]))
+            return
+
+        if step in ("set_price","set_card","set_owner","set_channel"):
+            key_map = {"set_price":"pro_price","set_card":"card_number","set_owner":"card_owner","set_channel":"channel"}
+            db.set_setting(key_map[step], txt)
+            context.user_data.clear()
+            await update.message.reply_text(f"✅ Yangilandi: {txt}",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ Sozlamalar", callback_data="adm_settings")]]))
+            return
+
+        if step == "set_starttext":
+            sm = db.get_start_message()
+            if sm:
+                db.update_start_message(text=txt)
+            else:
+                db.conn.execute("INSERT INTO start_message (text,photo_id) VALUES (?,'')", (txt,))
+                db.conn.commit()
+            context.user_data.clear()
+            await update.message.reply_text("✅ Start xabari yangilandi!",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ Sozlamalar", callback_data="adm_settings")]]))
+            return
+
+        # Admin PDF test yaratish steplari
+        if step == "pdf_title":
+            context.user_data["pdf_title"] = txt
+            context.user_data["step"] = "pdf_count"
+            await update.message.reply_text(f"✅ Nom: {txt}\n\nNechta savol? (Masalan: 30)")
+            return
+
+        if step == "pdf_count":
+            try:
+                n = int(txt)
+                context.user_data["pdf_count"] = n
+                context.user_data["step"] = "pdf_time"
+                await update.message.reply_text(f"✅ Savollar soni: {n}\n\nVaqt chegarasi (daqiqada)? Masalan: 30")
+            except:
+                await update.message.reply_text("Raqam kiriting. Masalan: 30")
+            return
+
+        if step == "pdf_time":
+            try:
+                t = int(txt)
+                context.user_data["pdf_time"] = t
+                context.user_data["step"] = "pdf_is_free"
+                await update.message.reply_text(
+                    f"✅ Vaqt: {t} daqiqa\n\nBu test bepulmi?\n1 — Ha (bepul)\n0 — Yo'q (PRO)")
+            except:
+                await update.message.reply_text("Raqam kiriting. Masalan: 30")
+            return
+
+        if step == "pdf_is_free":
+            is_free = 1 if txt.strip() in ("1","ha","yes") else 0
+            context.user_data["pdf_is_free"] = is_free
+            context.user_data["step"] = "pdf_key"
+            n = context.user_data.get("pdf_count", 30)
+            await update.message.reply_text(
+                f"✅ {'Bepul' if is_free else 'PRO (pullik)'}\n\n"
+                f"🔑 Javob kalitini yozing ({n} ta harf, faqat A/B/C/D):\n"
+                f"Masalan: ABCDABCDABCDABCDABCDABCDABCDABCD")
+            return
+
+        if step == "pdf_key":
+            n     = context.user_data.get("pdf_count", 30)
+            clean = re.sub(r"[^ABCD]", "", txt.upper())
+            if len(clean) != n:
+                await update.message.reply_text(f"⚠️ {len(clean)} ta harf kiritdingiz, {n} ta kerak.\nQaytadan yuboring:")
+                return
+            title   = context.user_data.get("pdf_title","")
+            file_id = context.user_data.get("pdf_file_id","")
+            is_free = context.user_data.get("pdf_is_free", 0)
+            t_limit = context.user_data.get("pdf_time", 30)
+            db.add_pdf_test(title, file_id, n, clean, is_free, t_limit)
+            context.user_data.clear()
+            await update.message.reply_text(
+                f"✅ Test qo'shildi!\n📝 {title}\n❓ {n} savol\n⏱ {t_limit} daqiqa",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📝 Testlarga", callback_data="adm_tests")],
+                    [InlineKeyboardButton("🔧 Admin",     callback_data="adm_back")],
+                ]))
+            # Barcha foydalanuvchilarga bildirishnoma
+            all_users = db.get_all_users()
+            sent = 0
+            for u in all_users:
+                if u["status"] in ("approved","pro","new") and u.get("full_name"):
+                    try:
+                        await context.bot.send_message(
+                            u["user_id"],
+                            f"🔔 Yangi test qo'shildi!\n\n📝 {title}\n❓ {n} ta savol\n⏱ Vaqt: {t_limit} daqiqa\n\nHoziroq ishlang! 👇",
+                            reply_markup=InlineKeyboardMarkup([
+                                [InlineKeyboardButton("📝 Testga o'tish", callback_data="free_tests")]
+                            ]))
+                        sent += 1
+                    except: pass
+            if sent:
+                await update.message.reply_text(f"📢 {sent} ta foydalanuvchiga xabar yuborildi.")
+            return
+
+        if step == "rename_test":
+            tid = context.user_data["edit_id"]
+            db.update_pdf_test(tid, title=txt)
+            context.user_data.clear()
+            await update.message.reply_text(f"✅ Test nomi yangilandi: {txt}",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📝 Testni ko'rish", callback_data=f"atv_{tid}")],
+                    [InlineKeyboardButton("🔧 Admin panel",    callback_data="adm_back")],
+                ]))
+            return
+
+        if step == "update_key":
+            n     = context.user_data.get("edit_cnt", 30)
+            clean = re.sub(r"[^ABCD]", "", txt.upper())
+            if len(clean) != n:
+                await update.message.reply_text(f"⚠️ {len(clean)} ta harf, {n} ta kerak. Qaytadan:"); return
+            tid = context.user_data["edit_id"]
+            db.update_pdf_test(tid, answer_key=clean)
+            context.user_data.clear()
+            await update.message.reply_text("✅ Javob kaliti yangilandi!",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📝 Testni ko'rish", callback_data=f"atv_{tid}")],
+                    [InlineKeyboardButton("🔧 Admin panel",    callback_data="adm_back")],
+                ]))
+            return
+
+        if step == "update_time":
+            try:
+                t   = int(txt)
+                tid = context.user_data["edit_id"]
+                db.update_pdf_test(tid, time_limit=t)
+                context.user_data.clear()
+                await update.message.reply_text(f"✅ Vaqt {t} daqiqaga yangilandi!",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("📝 Testni ko'rish", callback_data=f"atv_{tid}")],
+                        [InlineKeyboardButton("🔧 Admin panel",    callback_data="adm_back")],
+                    ]))
+            except:
+                await update.message.reply_text("Raqam kiriting. Masalan: 45")
+            return
+
+        if step == "add_guide_title":
+            context.user_data["guide_title"] = txt
+            context.user_data["step"] = "add_guide_content"
+            await update.message.reply_text(f"✅ Sarlavha: {txt}\n\nMatnini yozing (yoki fayl yuboring):")
+            return
+
+        if step == "add_guide_content":
+            title   = context.user_data.get("guide_title","")
+            is_free = context.user_data.get("guide_is_free", 0)
+            context.user_data.clear()
+            db.add_guide(title, txt, is_free)
+            await update.message.reply_text(f"✅ Qo'llanma qo'shildi: {title}",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📚 Qo'llanmalarga", callback_data="adm_guides")]]))
+            return
+
+    # ── FOYDALANUVCHI steplari ──────────────────────────────────────────
+    # Ro'yxatdan o'tish
     if step == "waiting_fullname":
         if len(txt.split()) < 2:
-            await update.message.reply_text(
-                "To'liq ism va familiyangizni kiriting.\nMasalan: Mallayev Ozodbek"); return
+            await update.message.reply_text("To'liq ism va familiyangizni kiriting.\nMasalan: Mallayev Ozodbek"); return
         db.add_user(uid, update.effective_user.username or "", update.effective_user.first_name, txt)
         is_re = context.user_data.get("re_register", False)
         context.user_data.clear()
-        # Adminga bildirishnoma
         try:
             tg_name = update.effective_user.first_name or ""
             tg_user = update.effective_user.username or "yoq"
@@ -1944,35 +2074,50 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🆔 ID: {uid}\n"
                 f"📛 @{tg_user}",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton(f"💬 {txt} ga xabar yuborish",
-                                         callback_data=f"reply_{uid}")],
-                    [InlineKeyboardButton("♻️ Qayta ro'yxatdan o'tkazish",
-                                         callback_data=f"adm_reregister_{uid}")],
+                    [InlineKeyboardButton(f"💬 {txt} ga xabar yuborish", callback_data=f"reply_{uid}")],
+                    [InlineKeyboardButton("♻️ Qayta ro'yxatdan o'tkazish", callback_data=f"adm_reregister_{uid}")],
                 ]))
         except: pass
         if is_re:
             await update.message.reply_text(
-                f"✅ Rahmat, {txt}!\n\nIsmingiz yangilandi. Endi botdan to'liq foydalanishingiz mumkin! 🎉",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🏠 Bosh menyu", callback_data="back_welcome")]
-                ]))
+                f"✅ Rahmat, {txt}!\n\nIsmingiz yangilandi. 🎉",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Bosh menyu", callback_data="back_welcome")]]))
         else:
             await show_welcome(update, context)
         return
-    # To'lov cheki (fayl)
+
+    # Test javoblari
+    if step == "waiting_answers":
+        await handle_test_answers(update, context); return
+
+    # Sahovat — o'z miqdorini kiritish
+    if step == "waiting_sahovat_custom_amount":
+        context.user_data["sahovat_amount"] = txt
+        context.user_data["step"] = "waiting_sahovat_proof"
+        card  = S("sahovat_card", S("card_number","9860 3501 4876 2387"))
+        owner = S("sahovat_owner", S("card_owner","Mallayev Ozodbek"))
+        niyat = context.user_data.get("sahovat_type","guide")
+        foiz  = "50% xayriya / 50% qalam haqi" if niyat == "guide" else "100% xayriya"
+        await update.message.reply_text(
+            f"✅ Miqdor: {txt} so'm\n💡 Taqsimot: {foiz}\n\n"
+            f"💳 Kartaga o'tkazing:\n`{card}`\n👤 Egasi: {owner}\n\n"
+            f"O'tkazib bo'lgach chekni shu yerga yuboring 📸",
+            parse_mode="Markdown")
+        return
+
+    # To'lov cheki (fayl) — PRO
     if step == "waiting_proof":
         doc = update.message.document
         if doc:
-            user = update.effective_user
             u    = db.get_user(uid)
-            name = uname(u) if u else user.first_name
+            name = uname(u) if u else update.effective_user.first_name
             context.user_data.clear()
             await update.message.reply_text("✅ Chek qabul qilindi!\n\nAdmin 24 soat ichida ko'rib chiqadi. 🙏")
             kb = [[InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"pay_ok_{uid}"),
                    InlineKeyboardButton("❌ Rad etish",  callback_data=f"pay_no_{uid}")]]
             await context.bot.send_document(
                 ADMIN_ID, doc.file_id,
-                caption=f"💎 Yangi to'lov (fayl)!\n\n👤 {name}\n🆔 {uid}\n📛 @{user.username or 'yoq'}",
+                caption=f"💎 Yangi to'lov (fayl)!\n\n👤 {name}\n🆔 {uid}\n📛 @{update.effective_user.username or 'yoq'}",
                 reply_markup=InlineKeyboardMarkup(kb))
             db.add_payment_request(uid)
         else:
@@ -1983,18 +2128,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if step == "waiting_sahovat_proof":
         doc = update.message.document
         if doc:
-            user = update.effective_user
-            u    = db.get_user(uid)
-            name = uname(u) if u else user.first_name
-            pct  = S("sahovat_percent","10")
-            db.add_sahovat_payment(uid)
+            u      = db.get_user(uid)
+            name   = uname(u) if u else update.effective_user.first_name
+            amount = context.user_data.get("sahovat_amount", "")
+            niyat  = context.user_data.get("sahovat_type", "guide")
+            niyat_t = "📖 Qo'llanma" if niyat == "guide" else "❤️ Ehson"
+            foiz_t  = "50% xayriya / 50% qalam haqi" if niyat == "guide" else "100% xayriya"
+            db.add_sahovat_payment(uid, amount, niyat)
             pay_id = db.conn.execute(
                 "SELECT id FROM sahovat_payments WHERE user_id=? ORDER BY id DESC LIMIT 1",
                 (uid,)).fetchone()["id"]
             context.user_data.clear()
-            await update.message.reply_text(
-                "🤲 Sahovat cheki qabul qilindi!\n\n"
-                "Admin ko'rib chiqadi va siz qo'llanmani olasiz. ❤️")
+            await update.message.reply_text("🤲 Sahovat cheki qabul qilindi!\n\nAdmin ko'rib chiqadi. ❤️")
+            amt_txt = f"{amount} so'm" if amount else "ko'rsatilmagan"
             kb = [
                 [InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"sah_ok_{pay_id}_{uid}"),
                  InlineKeyboardButton("❌ Rad etish",  callback_data=f"sah_no_{pay_id}_{uid}")],
@@ -2002,9 +2148,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
             await context.bot.send_document(
                 ADMIN_ID, doc.file_id,
-                caption=f"🤲 Yangi sahovat (fayl)!\n\n"
-                        f"👤 {name}\n🆔 {uid}\n📛 @{user.username or 'yoq'}\n"
-                        f"💡 50% mehribonlik uyiga yo'naltiriladi",
+                caption=f"🤲 Yangi sahovat (fayl)!\n\n👤 {name}\n🆔 {uid}\n📛 @{update.effective_user.username or 'yoq'}\n💰 Miqdor: {amt_txt}\n🎯 Niyat: {niyat_t}\n💡 {foiz_t}",
                 reply_markup=InlineKeyboardMarkup(kb))
         else:
             await update.message.reply_text("Iltimos rasm yoki fayl yuboring.")
@@ -2013,16 +2157,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Murojaat
     if step == "waiting_contact":
         back_cb = context.user_data.get("contact_back","free_menu")
-        u       = db.get_user(uid)
-        name    = uname(u) if u else str(uid)
+        u    = db.get_user(uid)
+        name = uname(u) if u else str(uid)
         context.user_data.clear()
-        kb_admin = [[InlineKeyboardButton(f"↩️ {name} ga javob", callback_data=f"reply_{uid}")]]
         await context.bot.send_message(
             ADMIN_ID,
-            f"📩 Yangi murojaat!\n{'━'*22}\n"
-            f"👤 {name}\n🆔 {uid}\n📛 @{update.effective_user.username or 'yoq'}\n"
-            f"{'━'*22}\n💬 {txt}",
-            reply_markup=InlineKeyboardMarkup(kb_admin))
+            f"📩 Yangi murojaat!\n{'━'*22}\n👤 {name}\n🆔 {uid}\n📛 @{update.effective_user.username or 'yoq'}\n{'━'*22}\n💬 {txt}",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(f"↩️ {name} ga javob", callback_data=f"reply_{uid}")]]))
         await update.message.reply_text(
             "✅ Murojaatingiz adminga yuborildi! 🙏\n\nAdmin 24 soat ichida ko'rib chiqadi.",
             reply_markup=InlineKeyboardMarkup([
@@ -2030,216 +2171,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("🏠 Menyuga qaytish", callback_data=back_cb)],
             ]))
         return
-
-    # Test javoblari
-    if step == "waiting_answers":
-        await handle_test_answers(update, context); return
-
-    if not is_admin(uid): return
-
-    # ── ADMIN AMALLAR ──────────────────────────────────────────────────
-    if step == "pdf_title":
-        context.user_data["pdf_title"] = txt
-        context.user_data["step"] = "pdf_count"
-        await update.message.reply_text(f"✅ Nom: {txt}\n\nNechta savol? (Masalan: 30)")
-
-    elif step == "pdf_count":
-        try:
-            n = int(txt)
-            context.user_data["pdf_count"] = n
-            context.user_data["step"]      = "pdf_time"
-            await update.message.reply_text(f"Savollar: {n} ta\n\nTest vaqt chegarasi (daqiqada)? (Masalan: 30)")
-        except:
-            await update.message.reply_text("Faqat raqam yozing. Masalan: 30")
-
-    elif step == "pdf_time":
-        try:
-            t = int(txt)
-            context.user_data["pdf_time"] = t
-            context.user_data["step"]     = "pdf_type"
-            kb = [[InlineKeyboardButton("🆓 Bepul", callback_data="pdf_type_free"),
-                   InlineKeyboardButton("👑 PRO",   callback_data="pdf_type_pro")]]
-            await update.message.reply_text(f"Vaqt: {t} daqiqa\n\nTest turi:", reply_markup=InlineKeyboardMarkup(kb))
-        except:
-            await update.message.reply_text("Faqat raqam yozing. Masalan: 30")
-
-    elif step == "waiting_pdf_file":
-        await update.message.reply_text("Iltimos PDF faylni yuboring.")
-
-    elif step == "pdf_key":
-        n     = context.user_data.get("pdf_count",30)
-        clean = re.sub(r"[^ABCD]", "", txt.upper())
-        if len(clean) != n:
-            await update.message.reply_text(f"⚠️ {len(clean)} ta harf, {n} ta kerak. Qaytadan:"); return
-        title   = context.user_data.get("pdf_title","")
-        file_id = context.user_data.get("pdf_file_id","")
-        is_free = context.user_data.get("pdf_is_free",0)
-        t_limit = context.user_data.get("pdf_time",30)
-        db.add_pdf_test(title, file_id, n, clean, is_free, t_limit)
-        context.user_data.clear()
-        kb = [[InlineKeyboardButton("📝 Testlarga", callback_data="adm_tests"),
-               InlineKeyboardButton("🔧 Admin",     callback_data="adm_back")]]
-        await update.message.reply_text(
-            f"✅ Test qo'shildi!\n📝 {title}\n❓ {n} savol\n⏱ {t_limit} daqiqa",
-            reply_markup=InlineKeyboardMarkup(kb))
-        # Barcha foydalanuvchilarga bildirishnoma
-        all_users = db.get_all_users()
-        sent = 0
-        for u in all_users:
-            if u["status"] in ("approved","pro","new") and u.get("full_name"):
-                try:
-                    await context.bot.send_message(
-                        u["user_id"],
-                        f"🔔 Yangi test qo'shildi!\n\n"
-                        f"📝 {title}\n"
-                        f"❓ {n} ta savol\n"
-                        f"⏱ Vaqt: {t_limit} daqiqa\n\n"
-                        f"Hoziroq ishlang! 👇",
-                        reply_markup=InlineKeyboardMarkup([
-                            [InlineKeyboardButton("📝 Testga o'tish", callback_data="free_tests")]
-                        ]))
-                    sent += 1
-                except: pass
-        await update.message.reply_text(f"📢 {sent} ta foydalanuvchiga xabar yuborildi.")
-
-    elif step == "rename_test":
-        tid = context.user_data["edit_id"]
-        db.update_pdf_test(tid, title=txt)
-        context.user_data.clear()
-        kb = [
-            [InlineKeyboardButton("📝 Testni ko'rish", callback_data=f"atv_{tid}")],
-            [InlineKeyboardButton("🔧 Admin panel",    callback_data="adm_back")],
-        ]
-        await update.message.reply_text(
-            f"✅ Muvaffaqiyatli!\nTest nomi yangilandi: {txt}",
-            reply_markup=InlineKeyboardMarkup(kb))
-
-    elif step == "update_key":
-        n     = context.user_data.get("edit_cnt",30)
-        clean = re.sub(r"[^ABCD]", "", txt.upper())
-        if len(clean) != n:
-            await update.message.reply_text(f"⚠️ {len(clean)} ta harf, {n} ta kerak. Qaytadan:"); return
-        tid = context.user_data["edit_id"]
-        db.update_pdf_test(tid, answer_key=clean)
-        context.user_data.clear()
-        kb = [
-            [InlineKeyboardButton("📝 Testni ko'rish", callback_data=f"atv_{tid}")],
-            [InlineKeyboardButton("🔧 Admin panel",    callback_data="adm_back")],
-        ]
-        await update.message.reply_text(
-            f"✅ Muvaffaqiyatli!\nJavob kaliti yangilandi.",
-            reply_markup=InlineKeyboardMarkup(kb))
-
-    elif step == "update_time":
-        try:
-            t   = int(txt)
-            tid = context.user_data["edit_id"]
-            db.update_pdf_test(tid, time_limit=t)
-            context.user_data.clear()
-            kb = [
-                [InlineKeyboardButton("📝 Testni ko'rish", callback_data=f"atv_{tid}")],
-                [InlineKeyboardButton("🔧 Admin panel",    callback_data="adm_back")],
-            ]
-            await update.message.reply_text(
-                f"✅ Muvaffaqiyatli!\nTest vaqti: {t} daqiqa",
-                reply_markup=InlineKeyboardMarkup(kb))
-        except:
-            await update.message.reply_text("Faqat raqam yozing.")
-
-    elif step == "add_guide_title":
-        context.user_data["guide_title"] = txt
-        context.user_data["step"]        = "waiting_guide_file"
-        await update.message.reply_text(f"✅ Sarlavha: {txt}\n\nEndi PDF faylni yuboring:")
-
-    elif step == "add_guide_content":
-        context.user_data["guide_content"] = txt
-        context.user_data["step"] = "add_guide_type"
-        kb = [[InlineKeyboardButton("🆓 Bepul", callback_data="guide_type_free"),
-               InlineKeyboardButton("👑 PRO",   callback_data="guide_type_pro")]]
-        await update.message.reply_text("Qo'llanma turi:", reply_markup=InlineKeyboardMarkup(kb))
-
-    elif step == "edit_guide_title":
-        gid = context.user_data["edit_id"]
-        db.update_guide(gid, title=txt)
-        context.user_data.clear()
-        kb = [
-            [InlineKeyboardButton("📖 Qo'llanmani ko'rish", callback_data=f"agv_{gid}")],
-            [InlineKeyboardButton("🔧 Admin panel",           callback_data="adm_back")],
-        ]
-        await update.message.reply_text(
-            f"✅ Muvaffaqiyatli!\nQo'llanma nomi yangilandi: {txt}",
-            reply_markup=InlineKeyboardMarkup(kb))
-
-    elif step == "edit_guide_content":
-        gid = context.user_data["edit_id"]
-        db.update_guide(gid, content=txt)
-        context.user_data.clear()
-        kb = [
-            [InlineKeyboardButton("📖 Qo'llanmani ko'rish", callback_data=f"agv_{gid}")],
-            [InlineKeyboardButton("🔧 Admin panel",           callback_data="adm_back")],
-        ]
-        await update.message.reply_text(
-            "✅ Muvaffaqiyatli! Qo'llanma matni yangilandi.",
-            reply_markup=InlineKeyboardMarkup(kb))
-
-    elif step == "set_starttext":
-        db.update_start_message(text=txt)
-        context.user_data.clear()
-        kb = [
-            [InlineKeyboardButton("⚙️ Sozlamalar",  callback_data="adm_settings")],
-            [InlineKeyboardButton("🔧 Admin panel", callback_data="adm_back")],
-        ]
-        await update.message.reply_text(
-            "✅ Muvaffaqiyatli! Start xabari yangilandi.",
-            reply_markup=InlineKeyboardMarkup(kb))
-
-    elif step in ("set_price","set_card","set_owner","set_channel"):
-        key_map = {"set_price":"pro_price","set_card":"card_number","set_owner":"card_owner","set_channel":"channel"}
-        db.set_setting(key_map[step], txt)
-        context.user_data.clear()
-        kb = [
-            [InlineKeyboardButton("⚙️ Sozlamalar",  callback_data="adm_settings")],
-            [InlineKeyboardButton("🔧 Admin panel", callback_data="adm_back")],
-        ]
-        await update.message.reply_text(
-            f"✅ Muvaffaqiyatli!\nYangi qiymat: {txt}",
-            reply_markup=InlineKeyboardMarkup(kb))
-
-    elif step in ("set_sah_card","set_sah_owner","set_sah_percent"):
-        key_map = {
-            "set_sah_card":    "sahovat_card",
-            "set_sah_owner":   "sahovat_owner",
-            "set_sah_percent": "sahovat_percent",
-        }
-        db.set_setting(key_map[step], txt)
-        context.user_data.clear()
-        kb = [
-            [InlineKeyboardButton("⚙️ Sozlamalar",  callback_data="adm_settings")],
-            [InlineKeyboardButton("🔧 Admin panel", callback_data="adm_back")],
-        ]
-        await update.message.reply_text(
-            f"✅ Sahovat sozlamasi yangilandi!\nYangi qiymat: {txt}",
-            reply_markup=InlineKeyboardMarkup(kb))
-
-    elif step == "broadcast":
-        users = db.get_users_by_status(None)
-        sent  = 0
-        for u in users:
-            if u["status"] in ("approved","pro"):
-                try:
-                    await context.bot.send_message(
-                        u["user_id"],
-                        f"📢\n\n{txt}",
-                        reply_markup=InlineKeyboardMarkup([
-                            [InlineKeyboardButton(
-                                "✍️ Asl ismim bilan qayta ro'yxatdan o'tish",
-                                callback_data="re_register")]
-                        ]))
-                    sent += 1
-                except: pass
-        context.user_data.clear()
-        kb = [[InlineKeyboardButton("🔧 Admin", callback_data="adm_back")]]
-        await update.message.reply_text(f"✅ {sent} ta foydalanuvchiga yuborildi.", reply_markup=InlineKeyboardMarkup(kb))
 
 # ═══════════════════════════════════════════════════════
 #  CALLBACK HANDLER (qolganlar)
