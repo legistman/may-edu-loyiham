@@ -331,20 +331,11 @@ async def pro_send_proof(update: Update, context: ContextTypes.DEFAULT_TYPE):
 #  SAHOVAT
 # ═══════════════════════════════════════════════════════
 async def sahovat_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q   = update.callback_query; await q.answer()
-    uid = q.from_user.id
+    q = update.callback_query; await q.answer()
     card  = S("sahovat_card", S("card_number","9860 3501 4876 2387"))
     owner = S("sahovat_owner", S("card_owner","Mallayev Ozodbek"))
-    stats    = db.get_sahovat_stats()
-    my_pay   = db.get_user_sahovat_payments(uid)
-    my_total = sum(p.get("amount_int",0) for p in my_pay if p.get("status")=="confirmed")
-    my_cnt   = len([p for p in my_pay if p.get("status")=="confirmed"])
-    cnt      = stats["confirmed_count"]
-    my_str   = (
-        f"👤 Sizning sahovatingiz: {my_cnt} marta, "
-        f"{my_total:,} so'm\n".replace(",", " ")
-        if my_cnt > 0 else "👤 Siz hali sahovat qilmagansiz\n"
-    )
+    stats = db.get_sahovat_stats()
+    cnt   = stats["confirmed_count"]
     await q.edit_message_text(
         f"🤲 Sahovat — Ezgu amal\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -353,7 +344,6 @@ async def sahovat_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💳 Karta:\n`{card}`\n"
         f"👤 Egasi: {owner}\n\n"
         f"🕊 Jami tasdiqlangan sahovat: {cnt} ta\n"
-        f"{my_str}"
         f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"Yaxshilik qiling — dunyoni yoritaylik! ✨",
         parse_mode="Markdown",
@@ -493,10 +483,7 @@ async def sahovat_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += "━━━━━━━━━━━━━━━━━━━━━━━━\n"
     await q.edit_message_text(
         text,
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔄 Yangilash", callback_data="sahovat_report")],
-            [back("sahovat_info")],
-        ]))
+        reply_markup=InlineKeyboardMarkup([[back("sahovat_info")]]))
 
 async def sahovat_payment_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin sahovat to'lovini tasdiqlaydi yoki rad etadi"""
@@ -1967,12 +1954,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if step == "pdf_is_free":
             is_free = 1 if txt.strip() in ("1","ha","yes") else 0
             context.user_data["pdf_is_free"] = is_free
-            context.user_data["step"] = "pdf_key"
-            n = context.user_data.get("pdf_count", 30)
+            context.user_data["step"] = "waiting_pdf_file"
             await update.message.reply_text(
-                f"✅ {'Bepul' if is_free else 'PRO (pullik)'}\n\n"
-                f"🔑 Javob kalitini yozing ({n} ta harf, faqat A/B/C/D):\n"
-                f"Masalan: ABCDABCDABCDABCDABCDABCDABCDABCD")
+                f"✅ {'🆓 Bepul' if is_free else '👑 PRO'}\n\n"
+                "📄 Endi PDF faylni yuboring:\n(Test savollari bo'lgan PDF fayl)")
+            return
+
             return
 
         if step == "pdf_key":
@@ -2349,13 +2336,6 @@ async def pro_expiry_reminder(context):
 # ═══════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════
-async def weekly_report_check(context: ContextTypes.DEFAULT_TYPE):
-    """Har kuni 20:00 da ishga tushadi — faqat jumada (weekday==4) yuboradi"""
-    from datetime import datetime
-    if datetime.now().weekday() != 4:  # 4 = juma
-        return
-    await send_weekly_report(context)
-
 async def send_weekly_report(context: ContextTypes.DEFAULT_TYPE):
     """Har juma 20:00 da kanalga haftalik hisobot yuboriladi"""
     from datetime import datetime, timedelta
@@ -2483,11 +2463,11 @@ def main():
             time=dtime(hour=10, minute=0),
             name="pro_reminder")
         # Har juma soat 20:00 da haftalik sahovat hisoboti
-        # run_repeating bilan kunlik tekshiruv — faqat jumada yuboradi
         app.job_queue.run_daily(
-            weekly_report_check,
+            send_weekly_report,
             time=dtime(hour=20, minute=0),
-            name="weekly_sahovat_check")
+            days=(4,),   # 4 = juma (0=dushanba)
+            name="weekly_sahovat_report")
 
     print("✅ Bot ishga tushdi!")
     app.run_polling(drop_pending_updates=True)
