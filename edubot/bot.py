@@ -1570,9 +1570,31 @@ async def adm_sah_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{ptype} {name} — {amt} so'm ({date})",
             callback_data=f"sah_donor_{d['id']}")])
 
+    kb.append([InlineKeyboardButton("🔄 Yangilash",          callback_data="adm_sah_report")])
+    kb.append([InlineKeyboardButton("🗑 Hisobotni tozalash", callback_data="adm_sah_clear")])
     kb.append([back("adm_back")])
     await q.edit_message_text(text + f"👥 Donorlar ({len(donors)} ta):",
                               reply_markup=InlineKeyboardMarkup(kb))
+
+async def adm_sah_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    if not is_admin(q.from_user.id): return
+    await q.edit_message_text(
+        "⚠️ Barcha tasdiqlangan sahovat ma'lumotlarini tozalashni tasdiqlaysizmi?\n\n"
+        "Bu amal qaytarib bo'lmaydi!",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Ha, tozalash", callback_data="adm_sah_clear_ok"),
+             InlineKeyboardButton("❌ Bekor",        callback_data="adm_sah_report")],
+        ]))
+
+async def adm_sah_clear_ok(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query; await q.answer()
+    if not is_admin(q.from_user.id): return
+    db.conn.execute("DELETE FROM sahovat_reports")
+    db.conn.execute("UPDATE sahovat_payments SET status='cleared' WHERE status='confirmed'")
+    db.conn.commit()
+    await q.answer("✅ Hisobot tozalandi!", show_alert=True)
+    await adm_sah_report(update, context)
 
 async def adm_sah_donor_detail(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Donor tafsiloti + miqdorni tahrirlash"""
@@ -2224,8 +2246,10 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "adm_rating_test":  await adm_rating_test_list(update, context)
     elif data == "adm_sahovat":      await adm_sahovat_payments(update, context)
     elif data == "adm_sah_report":         await adm_sah_report(update, context)
-    elif data.startswith("sah_donor_edit_"):await sahovat_edit_donor_amount(update, context)
-    elif data.startswith("sah_donor_"):     await adm_sah_donor_detail(update, context)
+    elif data == "adm_sah_clear":          await adm_sah_clear(update, context)
+    elif data == "adm_sah_clear_ok":       await adm_sah_clear_ok(update, context)
+    elif data.startswith("sah_edit_donor_"):await sahovat_edit_donor_amount(update, context)
+    elif data.startswith("sah_donor_"):      await adm_sah_donor_detail(update, context)
     elif data.startswith("sah_edit_"):      await sahovat_edit_amount(update, context)
     elif data.startswith("del_sah_report_"):
         if not is_admin(q.from_user.id): return
@@ -2432,6 +2456,8 @@ def main():
     app.add_handler(CallbackQueryHandler(sahovat_proof,          pattern=r"^sahovat_proof$"))
     app.add_handler(CallbackQueryHandler(sahovat_payment_action, pattern=r"^sah_(ok|no)_\d+_\d+$"))
     app.add_handler(CallbackQueryHandler(sah_clear_reports,      pattern=r"^sah_clear_reports$"))
+    app.add_handler(CallbackQueryHandler(adm_sah_clear,          pattern=r"^adm_sah_clear$"))
+    app.add_handler(CallbackQueryHandler(adm_sah_clear_ok,       pattern=r"^adm_sah_clear_ok$"))
     app.add_handler(CallbackQueryHandler(sah_clear_confirm,      pattern=r"^sah_clear_confirm$"))
     app.add_handler(CallbackQueryHandler(sahovat_edit_amount,    pattern=r"^sah_edit_\d+_\d+$"))
     app.add_handler(CallbackQueryHandler(sahovat_reply_prompt,   pattern=r"^sah_reply_\d+$"))
