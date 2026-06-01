@@ -454,7 +454,8 @@ async def sahovat_proof(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await sahovat_amount(update, context)
 
 async def sahovat_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query; await q.answer()
+    q    = update.callback_query; await q.answer()
+    uid  = q.from_user.id
     reports = db.get_sahovat_reports(5)
     stats   = db.get_sahovat_stats()
     total_confirmed = stats["confirmed_count"]
@@ -463,10 +464,7 @@ async def sahovat_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📊 Sahovat hisoboti\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"✅ Jami tasdiqlangan: {total_confirmed} ta\n\n"
-            "Oylik hisobotlar har oy oxirida chop etiladi.\n"
-            "Bu yerda qancha yig'ilgani, og'ir betob bolalar\n"
-            "va mehribonlik uyiga qancha o'tkazilgani\n"
-            "ko'rsatiladi. 🤝"
+            "Oylik hisobotlar har oy oxirida chop etiladi. 🤝"
         )
     else:
         text = f"📊 Sahovat hisoboti\n━━━━━━━━━━━━━━━━━━━━━━━━\n✅ Jami: {total_confirmed} ta\n\n"
@@ -474,16 +472,41 @@ async def sahovat_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += (
                 f"📅 {r['period']}\n"
                 f"💰 Yig'ildi: {r['total_sum']} so'm\n"
-                f"🏥 Og'ir betob bolalar + mehribonlik uyi: {r['charity_sum']} so'm\n"
+                f"🏥 Xayriya: {r['charity_sum']} so'm\n"
                 f"✍️ Qalam haqi: {r['author_sum']} so'm\n"
                 f"👥 Donorlar: {r['donors_count']} kishi\n"
             )
-            if r['note']:
+            if r.get('note'):
                 text += f"📝 {r['note']}\n"
             text += "━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    kb = [
+        [InlineKeyboardButton("🔄 Yangilash", callback_data="sahovat_report")],
+    ]
+    if is_admin(uid):
+        kb.append([InlineKeyboardButton("🗑 Hisobotlarni tozalash", callback_data="sah_clear_reports")])
+    kb.append([back("sahovat_info")])
+    await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+
+async def sah_clear_reports(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin hisobotlarni tozalaydi"""
+    q = update.callback_query; await q.answer()
+    if not is_admin(q.from_user.id): return
     await q.edit_message_text(
-        text,
-        reply_markup=InlineKeyboardMarkup([[back("sahovat_info")]]))
+        "⚠️ Barcha sahovat hisobotlarini o'chirishni tasdiqlaysizmi?\n\n"
+        "Bu amal qaytarib bo'lmaydi!",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Ha, o'chirish", callback_data="sah_clear_confirm"),
+             InlineKeyboardButton("❌ Bekor",         callback_data="sahovat_report")],
+        ]))
+
+async def sah_clear_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Hisobotlarni tasdiqlash bilan tozalash"""
+    q = update.callback_query; await q.answer()
+    if not is_admin(q.from_user.id): return
+    db.conn.execute("DELETE FROM sahovat_reports")
+    db.conn.commit()
+    await q.answer("✅ Hisobotlar tozalandi!", show_alert=True)
+    await sahovat_report(update, context)
 
 async def sahovat_payment_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin sahovat to'lovini tasdiqlaydi yoki rad etadi"""
@@ -1436,7 +1459,6 @@ async def adm_sahovat_payments(update: Update, context: ContextTypes.DEFAULT_TYP
         kb.append([InlineKeyboardButton(
             f"🤲 {name}",
             callback_data=f"aud_{p['user_id']}")])
-    kb.append([InlineKeyboardButton("📋 Tasdiqlangan to'lovlar", callback_data="adm_sah_confirmed")])
     kb.append([back("adm_back")])
     text = (
         f"🤲 Sahovat to'lovlari\n"
@@ -1448,95 +1470,6 @@ async def adm_sahovat_payments(update: Update, context: ContextTypes.DEFAULT_TYP
         text if pays else "✅ Kutayotgan sahovat to'lovlari yo'q.\n"
                           f"Jami tasdiqlangan: {stats['confirmed_count']} ta",
         reply_markup=InlineKeyboardMarkup(kb))
-
-async def adm_sah_confirmed(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Tasdiqlangan sahovat to'lovlari ro'yxati"""
-    q    = update.callback_query; await q.answer()
-    pays = db.get_confirmed_sahovat_payments()
-    kb   = []
-    if not pays:
-        await q.edit_message_text(
-            "Hali tasdiqlangan to'lovlar yo'q.",
-            reply_markup=InlineKeyboardMarkup([[back("adm_sahovat")]])); return
-    for p in pays[:20]:
-        name   = p.get("full_name") or p.get("first_name") or str(p["user_id"])
-        amount = p.get("amount","—")
-        ptype  = "📖" if p.get("payment_type","guide")=="guide" else "❤️"
-        date   = str(p.get("created_at",""))[:10]
-        kb.append([InlineKeyboardButton(
-            f"{ptype} {name} — {amount} so'm ({date})",
-            callback_data=f"sah_edit_{p['id']}")])
-    kb.append([back("adm_sahovat")])
-    await q.edit_message_text(
-        f"📋 Tasdiqlangan to'lovlar ({len(pays)} ta):\n"
-        f"Tahrirlash uchun bosing:",
-        reply_markup=InlineKeyboardMarkup(kb))
-
-async def adm_sah_edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Bitta tasdiqlangan to'lovni tahrirlash"""
-    q      = update.callback_query; await q.answer()
-    pay_id = int(q.data.replace("sah_edit_",""))
-    p      = db.get_sahovat_payment(pay_id)
-    if not p:
-        await q.answer("To'lov topilmadi!", show_alert=True); return
-    u      = db.get_user(p["user_id"])
-    name   = uname(u) if u else str(p["user_id"])
-    ptype  = "📖 Qo'llanma uchun" if p.get("payment_type","guide")=="guide" else "❤️ Faqat ehson"
-    amount = p.get("amount","—")
-    date   = str(p.get("created_at",""))[:16]
-    context.user_data["edit_sah_id"] = pay_id
-    await q.edit_message_text(
-        f"✏️ To'lovni tahrirlash\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 Kim: {name}\n"
-        f"💰 Summa: {amount} so'm\n"
-        f"📌 Toifa: {ptype}\n"
-        f"📅 Sana: {date}",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("💰 Summani o'zgartirish",  callback_data=f"sah_chg_amount_{pay_id}")],
-            [InlineKeyboardButton("📖 Qo'llanma uchun qilish", callback_data=f"sah_chg_type_{pay_id}_guide")],
-            [InlineKeyboardButton("❤️ Faqat ehson qilish",    callback_data=f"sah_chg_type_{pay_id}_ehson")],
-            [back("adm_sah_confirmed")],
-        ]))
-
-async def adm_sah_change(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Toifa yoki summani o'zgartirish"""
-    q    = update.callback_query; await q.answer()
-    data = q.data
-    if data.startswith("sah_chg_type_"):
-        parts  = data.replace("sah_chg_type_","").split("_")
-        pay_id = int(parts[0])
-        ntype  = parts[1]
-        db.conn.execute(
-            "UPDATE sahovat_payments SET payment_type=? WHERE id=?", (ntype, pay_id))
-        db.conn.commit()
-        # Haftalik hisobotni qayta hisoblash
-        _recalc_weekly(db)
-        await q.answer("✅ Toifa yangilandi!", show_alert=True)
-        q.data = f"sah_edit_{pay_id}"
-        await adm_sah_edit(update, context)
-    elif data.startswith("sah_chg_amount_"):
-        pay_id = int(data.replace("sah_chg_amount_",""))
-        context.user_data["step"]         = "sah_edit_amount"
-        context.user_data["edit_sah_id"]  = pay_id
-        await q.edit_message_text(
-            "💰 Yangi summani yozing (faqat raqam):\nMasalan: 25000\n\nBekor: /admin")
-
-def _recalc_weekly(db):
-    """Haftalik hisobotni qayta hisoblash"""
-    from datetime import datetime, timedelta
-    now_dt   = datetime.now()
-    period   = f"{(now_dt-timedelta(days=6)).strftime('%d.%m')}–{now_dt.strftime('%d.%m.%Y')}"
-    stats    = db.get_weekly_sahovat_stats()
-    db.conn.execute("DELETE FROM sahovat_reports WHERE period=?", (period,))
-    db.conn.commit()
-    def fmt(v): return f"{v:,}".replace(",", " ")
-    db.add_sahovat_report(
-        period,
-        fmt(stats["grand_total"]),
-        fmt(stats["total_charity"]),
-        fmt(stats["total_author"]),
-        stats["donors_cnt"])
 
 # ── STATISTIKA (ADMIN) ───────────────────────────────
 async def adm_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2034,22 +1967,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 t = int(txt)
                 context.user_data["pdf_time"] = t
-                context.user_data["step"] = "pdf_is_free"
+                context.user_data["step"] = "pdf_type_select"
+                kb = [[
+                    InlineKeyboardButton("🆓 Bepul", callback_data="adm_pdf_free"),
+                    InlineKeyboardButton("👑 PRO",   callback_data="adm_pdf_pro"),
+                ]]
                 await update.message.reply_text(
-                    f"✅ Vaqt: {t} daqiqa\n\nBu test bepulmi?\n1 — Ha (bepul)\n0 — Yo'q (PRO)")
+                    f"✅ Vaqt: {t} daqiqa\n\nTest turi:",
+                    reply_markup=InlineKeyboardMarkup(kb))
             except:
                 await update.message.reply_text("Raqam kiriting. Masalan: 30")
-            return
-
-        if step == "pdf_is_free":
-            is_free = 1 if txt.strip() in ("1","ha","yes") else 0
-            context.user_data["pdf_is_free"] = is_free
-            context.user_data["step"] = "pdf_key"
-            n = context.user_data.get("pdf_count", 30)
-            await update.message.reply_text(
-                f"✅ {'Bepul' if is_free else 'PRO (pullik)'}\n\n"
-                f"🔑 Javob kalitini yozing ({n} ta harf, faqat A/B/C/D):\n"
-                f"Masalan: ABCDABCDABCDABCDABCDABCDABCDABCD")
             return
 
         if step == "pdf_key":
@@ -2295,8 +2222,7 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "adm_last_users":   await adm_last_users(update, context)
     elif data == "adm_rating_all":   await adm_rating_all(update, context)
     elif data == "adm_rating_test":  await adm_rating_test_list(update, context)
-    elif data == "adm_sahovat":         await adm_sahovat_payments(update, context)
-    elif data == "adm_sah_confirmed":   await adm_sah_confirmed(update, context)
+    elif data == "adm_sahovat":      await adm_sahovat_payments(update, context)
     elif data == "adm_sah_report":         await adm_sah_report(update, context)
     elif data.startswith("sah_donor_edit_"):await sahovat_edit_donor_amount(update, context)
     elif data.startswith("sah_donor_"):     await adm_sah_donor_detail(update, context)
@@ -2378,12 +2304,18 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(ADMIN_ID, f"📢 {sent} ta foydalanuvchiga xabar yuborildi.")
 
     # PDF test type
-    elif data == "pdf_type_free":
-        context.user_data["pdf_is_free"] = 1; context.user_data["step"] = "waiting_pdf_file"
-        await q.edit_message_text("✅ Bepul tanlandi!\n\nEndi PDF faylni yuboring:")
-    elif data == "pdf_type_pro":
-        context.user_data["pdf_is_free"] = 0; context.user_data["step"] = "waiting_pdf_file"
-        await q.edit_message_text("✅ PRO tanlandi!\n\nEndi PDF faylni yuboring:")
+    elif data in ("pdf_type_free", "adm_pdf_free"):
+        context.user_data["pdf_is_free"] = 1
+        context.user_data["step"] = "waiting_pdf_file"
+        await q.edit_message_text(
+            "✅ 🆓 Bepul tanlandi!\n\n"
+            "📄 Endi PDF faylni yuboring:")
+    elif data in ("pdf_type_pro", "adm_pdf_pro"):
+        context.user_data["pdf_is_free"] = 0
+        context.user_data["step"] = "waiting_pdf_file"
+        await q.edit_message_text(
+            "✅ 👑 PRO tanlandi!\n\n"
+            "📄 Endi PDF faylni yuboring:")
 
     # Sozlamalar
     elif data == "set_startphoto_del":
@@ -2499,9 +2431,8 @@ def main():
     app.add_handler(CallbackQueryHandler(sahovat_report,         pattern=r"^sahovat_report$"))
     app.add_handler(CallbackQueryHandler(sahovat_proof,          pattern=r"^sahovat_proof$"))
     app.add_handler(CallbackQueryHandler(sahovat_payment_action, pattern=r"^sah_(ok|no)_\d+_\d+$"))
-    app.add_handler(CallbackQueryHandler(adm_sah_confirmed,      pattern=r"^adm_sah_confirmed$"))
-    app.add_handler(CallbackQueryHandler(adm_sah_edit,           pattern=r"^sah_edit_\d+$"))
-    app.add_handler(CallbackQueryHandler(adm_sah_change,         pattern=r"^sah_chg_(amount|type)_.+$"))
+    app.add_handler(CallbackQueryHandler(sah_clear_reports,      pattern=r"^sah_clear_reports$"))
+    app.add_handler(CallbackQueryHandler(sah_clear_confirm,      pattern=r"^sah_clear_confirm$"))
     app.add_handler(CallbackQueryHandler(sahovat_edit_amount,    pattern=r"^sah_edit_\d+_\d+$"))
     app.add_handler(CallbackQueryHandler(sahovat_reply_prompt,   pattern=r"^sah_reply_\d+$"))
     app.add_handler(CallbackQueryHandler(contact_admin,          pattern=r"^contact_admin$"))
