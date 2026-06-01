@@ -1954,12 +1954,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if step == "pdf_is_free":
             is_free = 1 if txt.strip() in ("1","ha","yes") else 0
             context.user_data["pdf_is_free"] = is_free
-            context.user_data["step"] = "pdf_key"
-            n = context.user_data.get("pdf_count", 30)
+            context.user_data["step"] = "waiting_pdf_file"
             await update.message.reply_text(
-                f"✅ {'Bepul' if is_free else 'PRO (pullik)'}\n\n"
-                f"🔑 Javob kalitini yozing ({n} ta harf, faqat A/B/C/D):\n"
-                f"Masalan: ABCDABCDABCDABCDABCDABCDABCDABCD")
+                f"✅ {'🆓 Bepul' if is_free else '👑 PRO (pullik)'}\n\n"
+                f"📄 Endi PDF faylni yuboring:\n"
+                f"(Test savollari bo'lgan PDF fayl)")
             return
 
         if step == "pdf_key":
