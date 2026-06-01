@@ -1944,22 +1944,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 t = int(txt)
                 context.user_data["pdf_time"] = t
-                context.user_data["step"] = "pdf_is_free"
+                context.user_data["step"] = "pdf_type_select"
+                kb = [[
+                    InlineKeyboardButton("🆓 Bepul",  callback_data="adm_pdf_free"),
+                    InlineKeyboardButton("👑 PRO",    callback_data="adm_pdf_pro"),
+                ]]
                 await update.message.reply_text(
-                    f"✅ Vaqt: {t} daqiqa\n\nBu test bepulmi?\n1 — Ha (bepul)\n0 — Yo'q (PRO)")
+                    f"✅ Vaqt: {t} daqiqa\n\nTest turi:",
+                    reply_markup=InlineKeyboardMarkup(kb))
             except:
                 await update.message.reply_text("Raqam kiriting. Masalan: 30")
-            return
-
-        if step == "pdf_is_free":
-            is_free = 1 if txt.strip() in ("1","ha","yes") else 0
-            context.user_data["pdf_is_free"] = is_free
-            context.user_data["step"] = "waiting_pdf_file"
-            await update.message.reply_text(
-                f"✅ {'🆓 Bepul' if is_free else '👑 PRO'}\n\n"
-                "📄 Endi PDF faylni yuboring:\n(Test savollari bo'lgan PDF fayl)")
-            return
-
             return
 
         if step == "pdf_key":
@@ -2287,12 +2281,14 @@ async def cb_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(ADMIN_ID, f"📢 {sent} ta foydalanuvchiga xabar yuborildi.")
 
     # PDF test type
-    elif data == "pdf_type_free":
-        context.user_data["pdf_is_free"] = 1; context.user_data["step"] = "waiting_pdf_file"
-        await q.edit_message_text("✅ Bepul tanlandi!\n\nEndi PDF faylni yuboring:")
-    elif data == "pdf_type_pro":
-        context.user_data["pdf_is_free"] = 0; context.user_data["step"] = "waiting_pdf_file"
-        await q.edit_message_text("✅ PRO tanlandi!\n\nEndi PDF faylni yuboring:")
+    elif data in ("pdf_type_free", "adm_pdf_free"):
+        context.user_data["pdf_is_free"] = 1
+        context.user_data["step"] = "waiting_pdf_file"
+        await q.edit_message_text("✅ 🆓 Bepul tanlandi!\n\n📄 Endi PDF faylni yuboring:\n(Test savollari bo\'lgan PDF fayl)")
+    elif data in ("pdf_type_pro", "adm_pdf_pro"):
+        context.user_data["pdf_is_free"] = 0
+        context.user_data["step"] = "waiting_pdf_file"
+        await q.edit_message_text("✅ 👑 PRO tanlandi!\n\n📄 Endi PDF faylni yuboring:\n(Test savollari bo\'lgan PDF fayl)")
 
     # Sozlamalar
     elif data == "set_startphoto_del":
