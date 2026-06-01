@@ -391,6 +391,22 @@ Siz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imk
             (user_id, amount, payment_type))
         self.conn.commit()
 
+    def get_confirmed_sahovat_payments(self):
+        """Tasdiqlangan sahovat to'lovlari"""
+        rows = self.conn.execute("""
+            SELECT s.*, u.first_name, u.full_name, u.username
+            FROM sahovat_payments s JOIN users u ON s.user_id=u.user_id
+            WHERE s.status='confirmed' ORDER BY s.created_at DESC""").fetchall()
+        return [dict(r) for r in rows]
+
+    def get_sahovat_payment(self, pay_id):
+        """Bitta sahovat to'lovi"""
+        r = self.conn.execute(
+            "SELECT s.*, u.first_name, u.full_name "
+            "FROM sahovat_payments s JOIN users u ON s.user_id=u.user_id "
+            "WHERE s.id=?", (pay_id,)).fetchone()
+        return dict(r) if r else None
+
     def get_pending_sahovat_payments(self):
         rows = self.conn.execute("""
             SELECT s.*,u.first_name,u.full_name,u.username
@@ -407,21 +423,6 @@ Siz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imk
         self.conn.execute(
             "UPDATE sahovat_payments SET status='rejected' WHERE id=?", (payment_id,))
         self.conn.commit()
-
-    def get_user_sahovat_payments(self, user_id):
-        """Foydalanuvchining sahovat to'lovlari"""
-        rows = self.conn.execute(
-            "SELECT id, amount, payment_type, status, created_at FROM sahovat_payments "
-            "WHERE user_id=? ORDER BY created_at DESC", (user_id,)).fetchall()
-        result = []
-        for r in rows:
-            d = dict(r)
-            # amount_int — raqam ko'rinishida
-            amt = str(d.get("amount","0")).replace(" ","").replace(",","")
-            try: d["amount_int"] = int(amt)
-            except: d["amount_int"] = 0
-            result.append(d)
-        return result
 
     def get_sahovat_stats(self):
         r = self.conn.execute(
