@@ -408,6 +408,21 @@ Siz huquq sohasida bilimni testlar va qo''llanmalar uyg''unligida o''rganish imk
             "UPDATE sahovat_payments SET status='rejected' WHERE id=?", (payment_id,))
         self.conn.commit()
 
+    def get_user_sahovat_payments(self, user_id):
+        """Foydalanuvchining sahovat to'lovlari"""
+        rows = self.conn.execute(
+            "SELECT id, amount, payment_type, status, created_at FROM sahovat_payments "
+            "WHERE user_id=? ORDER BY created_at DESC", (user_id,)).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            # amount_int — raqam ko'rinishida
+            amt = str(d.get("amount","0")).replace(" ","").replace(",","")
+            try: d["amount_int"] = int(amt)
+            except: d["amount_int"] = 0
+            result.append(d)
+        return result
+
     def get_sahovat_stats(self):
         r = self.conn.execute(
             "SELECT COUNT(*) FROM sahovat_payments WHERE status='confirmed'").fetchone()
