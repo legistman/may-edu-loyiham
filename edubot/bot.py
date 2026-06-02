@@ -2080,17 +2080,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if step == "add_guide_title":
             context.user_data["guide_title"] = txt
-            context.user_data["step"] = "add_guide_content"
-            await update.message.reply_text(f"✅ Sarlavha: {txt}\n\nMatnini yozing (yoki fayl yuboring):")
-            return
-
-        if step == "add_guide_content":
-            title   = context.user_data.get("guide_title","")
-            is_free = context.user_data.get("guide_is_free", 0)
-            context.user_data.clear()
-            db.add_guide(title, txt, is_free)
-            await update.message.reply_text(f"✅ Qo'llanma qo'shildi: {title}",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📚 Qo'llanmalarga", callback_data="adm_guides")]]))
+            context.user_data["step"]        = "waiting_guide_file"
+            await update.message.reply_text(
+                f"✅ Sarlavha: {txt}\n\n"
+                "📄 Endi PDF faylni yuboring\n"
+                "(qo'llanma fayli):")
             return
 
     # ── FOYDALANUVCHI steplari ──────────────────────────────────────────
