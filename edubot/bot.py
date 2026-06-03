@@ -59,8 +59,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 key     = decoded.get("key","").upper()
                 time_l  = int(decoded.get("time", 30))
                 is_free = int(decoded.get("is_free", 0))
-                questions = decoded.get("questions", [])
-                n       = len(questions) or len(key)
+                n       = int(decoded.get("cnt", len(key)))
                 db.add_pdf_test(name, "", n, key, is_free, time_l)
                 # Foydalanuvchilarga xabar
                 all_users = db.get_all_users()
