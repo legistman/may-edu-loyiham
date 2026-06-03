@@ -163,7 +163,7 @@ async def about_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton(
                 "📱 Bot haqida to'liq tanishtirish",
-                web_app=WebAppInfo(url=f"{WEBAPP_BASE}/bot_webapp.html"))],
+                web_app=WebAppInfo(url=WEBAPP_URL))],
             [back("back_welcome")],
         ]))
 
@@ -352,7 +352,7 @@ async def sahovat_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton(
                 "📱 Sahovat haqida batafsil",
-                web_app=WebAppInfo(url=f"{WEBAPP_BASE}/sahovat_webapp.html"))],
+                web_app=WebAppInfo(url=WEBAPP_URL))],
             [InlineKeyboardButton("🤲 Sahovat qilish",  callback_data="sahovat_amount")],
             [InlineKeyboardButton("📊 Hisobot",         callback_data="sahovat_report")],
             [back("back_welcome")],
