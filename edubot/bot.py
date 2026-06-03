@@ -97,7 +97,12 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
 #  XU SH KELIBSIZ
 # ═══════════════════════════════════════════════════════
 async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid  = (update.effective_user or update.callback_query.from_user).id
+    if update.effective_user:
+        uid = update.effective_user.id
+    elif update.callback_query:
+        uid = update.callback_query.from_user.id
+    else:
+        return
     u    = db.get_user(uid)
     fn   = uname(u)
     prem = is_pro(uid)
@@ -127,7 +132,7 @@ async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     wa_data = {
         "full_name":  fn,
         "is_pro":     prem,
-        "is_admin":   is_admin(uid),
+        "is_admin":   bool(uid == ADMIN_ID),
         "pro_until":  exp_str(uid) if prem else "",
         "tests_done": len(results),
         "best_ball":  round(max((r.get("correct",0)*3.1 for r in results), default=0), 1),
@@ -2542,6 +2547,36 @@ async def webapp_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("🤲 Sahovat qilish", callback_data="sahovat_info")
             ]]))
+
+    # Admin statistikasi
+    elif action == "get_admin_stats":
+        if uid != ADMIN_ID: return
+        stats = {
+            "total_users":  len(db.get_all_users()),
+            "pro_users":    sum(1 for u in db.get_all_users() if u.get("status")=="pro"),
+            "today_users":  db.get_today_users_count() if hasattr(db,'get_today_users_count') else 0,
+            "total_tests":  len(db.get_all_pdf_tests()),
+            "total_results": db.get_total_results_count() if hasattr(db,'get_total_results_count') else 0,
+        }
+        await update.message.reply_text(
+            f"📊 Admin statistikasi:\n"
+            f"👥 Jami foydalanuvchilar: {stats['total_users']}\n"
+            f"👑 PRO obunalilar: {stats['pro_users']}\n"
+            f"📝 Jami testlar: {stats['total_tests']}")
+
+    # PRO to'lov cheki
+    elif action == "send_proof_pro":
+        context.user_data["step"] = "waiting_proof"
+        await update.message.reply_text(
+            "📸 PRO obuna uchun to'lov chekini yuboring\n\n"
+            "(Rasm yoki fayl shaklida)")
+
+    # Sahovat cheki
+    elif action == "send_proof_sahovat":
+        context.user_data["step"] = "waiting_sahovat_proof"
+        await update.message.reply_text(
+            "📸 Sahovat to'lov chekini yuboring\n\n"
+            "(Rasm yoki fayl shaklida)")
 
     # PRO olish
     elif action == "buy_pro":
