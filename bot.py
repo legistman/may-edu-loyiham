@@ -144,7 +144,8 @@ async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "card_own":   S("card_owner","Mallayev Ozodbek"),
     }
     encoded = base64.b64encode(_json.dumps(wa_data, ensure_ascii=False).encode()).decode()
-    wa_url  = f"{WEBAPP_URL}?tgWebAppStartParam={encoded}"
+    # start_param ni URL ga qo'shamiz - Telegram Web App qo'llab-quvvatlaydi
+    wa_url  = f"{WEBAPP_URL}#{encoded}"
 
     kb = [[InlineKeyboardButton("🌐 LEGISTMAN — Ilovani ochish",
                                 web_app=WebAppInfo(url=wa_url))]]
