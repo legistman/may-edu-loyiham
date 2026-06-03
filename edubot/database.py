@@ -12,13 +12,18 @@ class Database:
     def _create_tables(self):
         c = self.conn.cursor()
         c.execute("""CREATE TABLE IF NOT EXISTS users (
-            user_id    INTEGER PRIMARY KEY,
-            username   TEXT DEFAULT '',
-            first_name TEXT DEFAULT '',
-            full_name  TEXT DEFAULT '',
-            status     TEXT DEFAULT 'new',
-            pro_until  TEXT DEFAULT NULL,
-            joined_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+            user_id      INTEGER PRIMARY KEY,
+            username     TEXT DEFAULT '',
+            first_name   TEXT DEFAULT '',
+            full_name    TEXT DEFAULT '',
+            status       TEXT DEFAULT 'new',
+            pro_until    TEXT DEFAULT NULL,
+            pending_step TEXT DEFAULT NULL,
+            joined_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+        # Eski DB uchun pending_step ustunini qo'shamiz
+        try:
+            c.execute("ALTER TABLE users ADD COLUMN pending_step TEXT DEFAULT NULL")
+        except: pass
         c.execute("""CREATE TABLE IF NOT EXISTS pdf_tests (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
             title          TEXT NOT NULL,
