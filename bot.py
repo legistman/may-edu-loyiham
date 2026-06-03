@@ -1,7 +1,7 @@
 import logging, os, re, time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, WebAppInfo
 from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                           MessageHandler, filters, ContextTypes)
 from database import Database
@@ -12,6 +12,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_TOKEN")
 ADMIN_ID  = int(os.getenv("ADMIN_ID", "123456789"))
 TZ        = ZoneInfo("Asia/Tashkent")
 WEBAPP_BASE = "https://legistman.github.io/may-edu-loyiham"
+
+WEBAPP_URL = "https://legistman.github.io/LEGISTMAN-WEB-APP"  # GitHub Pages URL
 
 def now():       return datetime.now(TZ)
 def S(k, d=""):  return db.get_setting(k) or d
@@ -2421,6 +2423,125 @@ async def send_weekly_report(context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(ADMIN_ID,
             f"⚠️ Haftalik hisobot kanalga yuborilmadi:\n{e}")
 
+async def webapp_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Web App dan kelgan ma'lumotlarni qayta ishlash"""
+    import json as _json
+    uid  = update.effective_user.id
+    raw  = update.message.web_app_data.data
+    try:
+        data   = _json.loads(raw)
+        action = data.get("action","")
+    except:
+        return
+
+    # Ro'yxatdan o'tish
+    if action == "register":
+        full_name = data.get("full_name","").strip()
+        if len(full_name.split()) >= 2:
+            db.add_user(uid, update.effective_user.username or "",
+                        update.effective_user.first_name, full_name)
+            # Adminga bildirishnoma
+            try:
+                await context.bot.send_message(
+                    ADMIN_ID,
+                    f"🆕 Yangi a'zo!\n━━━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 {full_name}\n🆔 {uid}\n"
+                    f"📛 @{update.effective_user.username or 'yoq'}",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton(f"💬 {full_name} ga xabar",
+                                             callback_data=f"reply_{uid}")
+                    ]]))
+            except: pass
+            await show_welcome(update, context)
+
+    # Testlar
+    elif action == "open_tests":
+        prem = is_pro(uid)
+        if prem:
+            context.user_data["from_webapp"] = True
+            # Fake callback query orqali pro_tests_list ga yo'naltirish
+            await update.message.reply_text(
+                "📝 Testlar:",
+                reply_markup=InlineKeyboardMarkup([
+                    *[[InlineKeyboardButton(
+                        f"{'🆓' if t.get('is_free') else '👑'} {t['title']}",
+                        callback_data=f"pdf_test_{t['id']}"
+                    )] for t in db.get_all_pdf_tests()],
+                    [InlineKeyboardButton("🏠 Bosh menyu", callback_data="back_welcome")]
+                ]))
+        else:
+            await update.message.reply_text(
+                "📝 Bepul testlar:",
+                reply_markup=InlineKeyboardMarkup([
+                    *[[InlineKeyboardButton(
+                        f"{'🆓' if t.get('is_free') else '🔒'} {t['title']}",
+                        callback_data=f"pdf_test_{t['id']}" if t.get('is_free') else f"pro_locked_{t['id']}"
+                    )] for t in db.get_all_pdf_tests()],
+                    [InlineKeyboardButton("🏠 Bosh menyu", callback_data="back_welcome")]
+                ]))
+
+    # Qo'llanmalar
+    elif action == "open_guides":
+        prem = is_pro(uid)
+        guides = db.get_all_guides() if prem else db.get_free_guides()
+        await update.message.reply_text(
+            "📚 Qo'llanmalar:",
+            reply_markup=InlineKeyboardMarkup([
+                *[[InlineKeyboardButton(f"📖 {g['title']}", callback_data=f"guide_{g['id']}")] for g in guides],
+                [InlineKeyboardButton("🏠 Bosh menyu", callback_data="back_welcome")]
+            ]))
+
+    # Statistika
+    elif action == "open_stats":
+        await update.message.reply_text(
+            "📊 Statistika:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("👤 Shaxsiy natijalar", callback_data="my_results")],
+                [InlineKeyboardButton("🏆 Ommaviy reyting",   callback_data="public_rating")],
+                [InlineKeyboardButton("🏠 Bosh menyu",        callback_data="back_welcome")],
+            ]))
+
+    # Bot haqida
+    elif action == "open_about":
+        context.user_data.clear()
+        from telegram import Update as _U
+        class FakeQuery:
+            from_user = update.effective_user
+            message   = update.message
+            data      = "about_bot"
+            async def answer(self): pass
+            async def edit_message_text(self, *a, **kw):
+                await update.message.reply_text(*a, **kw)
+        update.callback_query = FakeQuery()
+        await about_bot(update, context)
+        update.callback_query = None
+
+    # Adminga murojaat
+    elif action == "open_contact":
+        prem    = is_pro(uid)
+        back_cb = "pro_menu" if prem else "free_menu"
+        context.user_data["step"]         = "waiting_contact"
+        context.user_data["contact_back"] = back_cb
+        await update.message.reply_text(
+            "📩 Adminga murojaat\n\n"
+            "✍️ Murojaatingizni yozing:")
+
+    # Sahovat
+    elif action == "open_sahovat":
+        await update.message.reply_text(
+            "🤲 Sahovat",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🤲 Sahovat qilish", callback_data="sahovat_info")
+            ]]))
+
+    # PRO olish
+    elif action == "buy_pro":
+        await update.message.reply_text(
+            "👑 PRO obuna",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("💳 To'lov qilish", callback_data="buy_pro")
+            ]]))
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -2496,6 +2617,7 @@ def main():
     app.add_handler(CallbackQueryHandler(cb_handler))
 
     # Fayllar va rasmlar
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, webapp_data_handler))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_pdf))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
