@@ -49,7 +49,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if is_admin(user.id):
         db.add_user(user.id, user.username or "", user.first_name, user.first_name)
-        await show_admin_menu(update, context); return
+        await show_welcome(update, context); return
 
     # Kanal tekshiruvi
     ch = S("channel", "@legistman")
