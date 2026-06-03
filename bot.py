@@ -118,22 +118,31 @@ async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"PRO obuna: {exp_str(uid)} gacha aktiv ✅\n\n"
             f"{goal}"
         )
-        if badge_str: header += f"\n{badge_str}"
-        kb = [
-            [InlineKeyboardButton("👑 PRO bo'lim",       callback_data="pro_menu")],
-            [InlineKeyboardButton("🤲 Sahovat qilish",   callback_data="sahovat_info")],
-            [InlineKeyboardButton("📩 Adminga murojaat", callback_data="contact_admin")],
-        ]
     else:
         header = f"👋 Xush kelibsiz, {fn}!\n\n{goal}"
-        if badge_str: header += f"\n{badge_str}"
-        kb = [
-            [InlineKeyboardButton("ℹ️ Bot haqida",       callback_data="about_bot")],
-            [InlineKeyboardButton("🆓 Bepul versiya",     callback_data="free_menu")],
-            [InlineKeyboardButton("👑 PRO versiya",       callback_data="pro_info")],
-            [InlineKeyboardButton("🤲 Sahovat qilish",    callback_data="sahovat_info")],
-            [InlineKeyboardButton("📩 Adminga murojaat", callback_data="contact_admin")],
-        ]
+    if badge_str: header += f"\n{badge_str}"
+
+    # Foydalanuvchi ma'lumotlarini Web App ga uzatish
+    import base64, json as _json
+    wa_data = {
+        "full_name":  fn,
+        "is_pro":     prem,
+        "is_admin":   is_admin(uid),
+        "pro_until":  exp_str(uid) if prem else "",
+        "tests_done": len(results),
+        "best_ball":  round(max((r.get("correct",0)*3.1 for r in results), default=0), 1),
+        "goal_done":  done_today,
+        "badges":     badges,
+        "is_new":     False,
+        "pro_price":  S("pro_price","349 000"),
+        "card_num":   S("card_number","9860 3501 4876 2387"),
+        "card_own":   S("card_owner","Mallayev Ozodbek"),
+    }
+    encoded = base64.b64encode(_json.dumps(wa_data, ensure_ascii=False).encode()).decode()
+    wa_url  = f"{WEBAPP_URL}?tgWebAppStartParam={encoded}"
+
+    kb = [[InlineKeyboardButton("🌐 LEGISTMAN — Ilovani ochish",
+                                web_app=WebAppInfo(url=wa_url))]]
 
     if update.callback_query:
         try: await update.callback_query.edit_message_text(header, reply_markup=InlineKeyboardMarkup(kb))
