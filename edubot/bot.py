@@ -9,7 +9,7 @@ from database import Database
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 db       = Database()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_TOKEN")
-ADMIN_ID  = int(os.getenv("ADMIN_ID", "123456789"))
+ADMIN_ID  = int(os.getenv("ADMIN_ID", "7869342062"))
 TZ        = ZoneInfo("Asia/Tashkent")
 WEBAPP_BASE = "https://legistman.github.io/may-edu-loyiham"
 
@@ -2567,16 +2567,32 @@ async def webapp_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     # PRO to'lov cheki
     elif action == "send_proof_pro":
         context.user_data["step"] = "waiting_proof"
+        card = S("card_number","9860 3501 4876 2387")
+        owner = S("card_owner","Mallayev Ozodbek")
         await update.message.reply_text(
-            "📸 PRO obuna uchun to'lov chekini yuboring\n\n"
-            "(Rasm yoki fayl shaklida)")
+            f"💳 PRO obuna to'lovi\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"Karta: `{card}`\n"
+            f"Egasi: {owner}\n\n"
+            f"💰 Miqdor: {S('pro_price','349 000')} so'm\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📸 To'lov chekini (screenshot) shu yerga yuboring:",
+            parse_mode="Markdown")
 
     # Sahovat cheki
     elif action == "send_proof_sahovat":
         context.user_data["step"] = "waiting_sahovat_proof"
+        card = S("card_number","9860 3501 4876 2387")
+        owner = S("card_owner","Mallayev Ozodbek")
         await update.message.reply_text(
-            "📸 Sahovat to'lov chekini yuboring\n\n"
-            "(Rasm yoki fayl shaklida)")
+            f"🤲 Sahovat to'lovi\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"Karta: `{card}`\n"
+            f"Egasi: {owner}\n\n"
+            f"💰 Istalgan miqdor\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📸 To'lov chekini (screenshot) shu yerga yuboring:",
+            parse_mode="Markdown")
 
     # PRO olish
     elif action == "buy_pro":
