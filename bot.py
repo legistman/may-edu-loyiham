@@ -1718,12 +1718,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo
     if not photo: return
 
-    # DB dan pending_step ni olish (Web App yopilganda context yo'qolishi mumkin)
+    # DB dan pending_step ni olish
     if not step:
         try:
             row = db.conn.execute("SELECT pending_step FROM users WHERE user_id=?", (uid,)).fetchone()
-            if row and row["pending_step"]:
-                step = row["pending_step"]
+            if row and row[0]:
+                step = row[0]
                 context.user_data["step"] = step
         except: pass
 
@@ -2578,8 +2578,10 @@ async def webapp_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif action == "send_proof_pro":
         context.user_data["step"] = "waiting_proof"
         # DB ga ham saqlaymiz - Web App yopilganda ham ishlaydi
-        db.conn.execute("UPDATE users SET pending_step=? WHERE user_id=?", ("waiting_proof", uid))
-        db.conn.commit()
+        try:
+            db.conn.execute("UPDATE users SET pending_step=? WHERE user_id=?", ("waiting_proof", uid))
+            db.conn.commit()
+        except: pass
         card = S("card_number","9860 3501 4876 2387")
         owner = S("card_owner","Mallayev Ozodbek")
         await update.message.reply_text(
@@ -2595,8 +2597,10 @@ async def webapp_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Sahovat cheki
     elif action == "send_proof_sahovat":
         context.user_data["step"] = "waiting_sahovat_proof"
-        db.conn.execute("UPDATE users SET pending_step=? WHERE user_id=?", ("waiting_sahovat_proof", uid))
-        db.conn.commit()
+        try:
+            db.conn.execute("UPDATE users SET pending_step=? WHERE user_id=?", ("waiting_sahovat_proof", uid))
+            db.conn.commit()
+        except: pass
         card = S("card_number","9860 3501 4876 2387")
         owner = S("card_owner","Mallayev Ozodbek")
         await update.message.reply_text(
