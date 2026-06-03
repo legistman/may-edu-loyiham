@@ -148,6 +148,11 @@ async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "pro_price":  S("pro_price","349 000"),
         "card_num":   S("card_number","9860 3501 4876 2387"),
         "card_own":   S("card_owner","Mallayev Ozodbek"),
+        "tests":      [{"id":t["id"],"title":t["title"],"is_free":t.get("is_free",0),
+                         "time_limit":t.get("time_limit",30),"question_count":t.get("question_count",30)}
+                        for t in db.get_all_pdf_tests()],
+        "guides":     [{"id":g["id"],"title":g["title"],"is_free":g.get("is_free",1)}
+                        for g in db.get_all_guides()],
     }
     encoded = base64.b64encode(_json.dumps(wa_data, ensure_ascii=True).encode()).decode()
     # start_param ni URL ga qo'shamiz - Telegram Web App qo'llab-quvvatlaydi
