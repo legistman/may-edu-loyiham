@@ -117,7 +117,13 @@ async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     badges, _ = db.get_user_badges(uid)
     badge_str  = "  ".join(badges) if badges else ""
 
-    if prem:
+    if uid == ADMIN_ID:
+        header = (
+            f"🔧 Admin panel\n"
+            f"👤 {fn}\n\n"
+            f"{goal}"
+        )
+    elif prem:
         header = (
             f"👑 Xush kelibsiz, {fn}!\n"
             f"PRO obuna: {exp_str(uid)} gacha aktiv ✅\n\n"
@@ -143,7 +149,7 @@ async def show_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "card_num":   S("card_number","9860 3501 4876 2387"),
         "card_own":   S("card_owner","Mallayev Ozodbek"),
     }
-    encoded = base64.b64encode(_json.dumps(wa_data, ensure_ascii=False).encode()).decode()
+    encoded = base64.b64encode(_json.dumps(wa_data, ensure_ascii=True).encode()).decode()
     # start_param ni URL ga qo'shamiz - Telegram Web App qo'llab-quvvatlaydi
     wa_url  = f"{WEBAPP_URL}?d={encoded}"
 
