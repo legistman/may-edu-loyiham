@@ -2619,6 +2619,64 @@ async def webapp_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"📸 To'lov chekini (screenshot) shu yerga yuboring:",
             parse_mode="Markdown")
 
+    # Yangi test saqlash (Web App admin panelidan)
+    elif action == "add_test_full":
+        if uid != ADMIN_ID: return
+        name      = data.get("name","").strip()
+        time_l    = int(data.get("time", 30))
+        is_free   = int(data.get("is_free", 0))
+        key       = data.get("key","").upper()
+        questions = data.get("questions", [])
+        if not name or not key:
+            await update.message.reply_text("⚠️ Test nomi yoki kalit yo'q!")
+            return
+        # Savol matnlarini birlashtirish
+        q_text = ""
+        q_text = ""
+        for i, q in enumerate(questions):
+            q_text += str(i+1)+". "+q.get("text","")+chr(10)
+        # DB ga saqlash - file_id bo'sh (savollar matnda)
+        db.add_pdf_test(name, "", len(questions) or len(key), key, is_free, time_l)
+        # Barcha foydalanuvchilarga xabar
+        all_users = db.get_all_users()
+        sent = 0
+        for u in all_users:
+            if u.get("full_name"):
+                try:
+                    await context.bot.send_message(
+                        u["user_id"],
+                        f"📝 Yangi test qo'shildi!\n\n"
+                        f"📌 {name}\n"
+                        f"{'🆓 Bepul' if is_free else '👑 PRO obuna'}\n\n"
+                        f"Hoziroq ishlang! 👇",
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("📝 Testlar", callback_data="free_menu" if is_free else "pro_menu")
+                        ]]))
+                    sent += 1
+                except: pass
+        await update.message.reply_text(
+            f"✅ Test saqlandi!\n"
+            f"📌 {name}\n"
+            f"❓ {len(questions)} ta savol\n"
+            f"🔑 Kalit: {key}\n"
+            f"📢 {sent} ta foydalanuvchiga xabar yuborildi.")
+
+    # Yangi qo'llanma saqlash (Web App admin panelidan)
+    elif action == "add_guide":
+        if uid != ADMIN_ID: return
+        name    = data.get("name","").strip()
+        is_free = int(data.get("is_free", 1))
+        if not name:
+            await update.message.reply_text("⚠️ Qo'llanma nomi yo'q!")
+            return
+        context.user_data["step"]           = "waiting_guide_file"
+        context.user_data["guide_title"]    = name
+        context.user_data["guide_is_free"]  = is_free
+        await update.message.reply_text(
+            f"✅ Nom: {name}\n"
+            f"Tur: {'Bepul' if is_free else 'PRO'}\n\n"
+            f"📄 Endi PDF faylni yuboring:")
+
     # PRO olish
     elif action == "buy_pro":
         await update.message.reply_text(
