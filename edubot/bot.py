@@ -47,6 +47,45 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     context.user_data.clear()
 
+    # savetest_ parametrini tekshirish
+    args = context.args
+    if args and args[0].startswith("savetest_"):
+        if is_admin(user.id):
+            import base64, json as _json
+            try:
+                encoded = args[0][9:]  # "savetest_" dan keyin
+                decoded = _json.loads(base64.b64decode(encoded + "==").decode("utf-8"))
+                name    = decoded.get("name","")
+                key     = decoded.get("key","").upper()
+                time_l  = int(decoded.get("time", 30))
+                is_free = int(decoded.get("is_free", 0))
+                questions = decoded.get("questions", [])
+                n       = len(questions) or len(key)
+                db.add_pdf_test(name, "", n, key, is_free, time_l)
+                # Foydalanuvchilarga xabar
+                all_users = db.get_all_users()
+                sent = 0
+                for u in all_users:
+                    if u.get("full_name"):
+                        try:
+                            await context.bot.send_message(
+                                u["user_id"],
+                                f"📝 Yangi test qo'shildi!\n\n"
+                                f"📌 {name}\n"
+                                f"{'🆓 Bepul' if is_free else '👑 PRO obuna'}\n\n"
+                                f"Hoziroq ishlang!")
+                            sent += 1
+                        except: pass
+                await update.message.reply_text(
+                    f"✅ Test saqlandi!\n"
+                    f"📌 {name}\n"
+                    f"❓ {n} ta savol\n"
+                    f"📢 {sent} ta foydalanuvchiga xabar yuborildi.")
+            except Exception as e:
+                await update.message.reply_text(f"❌ Xato: {e}")
+            await show_welcome(update, context)
+            return
+
     if is_admin(user.id):
         db.add_user(user.id, user.username or "", user.first_name, user.first_name)
         await show_welcome(update, context); return
