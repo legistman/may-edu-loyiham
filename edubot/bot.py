@@ -2428,12 +2428,6 @@ async def send_weekly_report(context: ContextTypes.DEFAULT_TYPE):
             f"⚠️ Haftalik hisobot kanalga yuborilmadi:\n{e}")
 
 def main():
-    # Conflict oldini olish - webhook o'chirish
-    import httpx
-    try:
-        httpx.get(f"https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=10)
-    except: pass
-
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
