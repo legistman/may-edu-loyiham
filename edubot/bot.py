@@ -2097,12 +2097,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if step == "add_guide_content":
             title   = context.user_data.get("guide_title","")
             is_free = context.user_data.get("guide_is_free", 0)
-            context.user_data.clear()
-            db.add_guide(title, txt, is_free)
-            await update.message.reply_text(f"✅ Qo'llanma qo'shildi: {title}",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📚 Qo'llanmalarga", callback_data="adm_guides")]]))
+            await update.message.reply_text(
+                "PDF fayl yuboring! Qogoz qisqich tugmasini bosib PDF tanlang.")
             return
-
     # ── FOYDALANUVCHI steplari ──────────────────────────────────────────
     # Ro'yxatdan o'tish
     if step == "waiting_fullname":
