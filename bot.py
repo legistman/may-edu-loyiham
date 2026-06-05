@@ -1792,6 +1792,16 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"✅ PDF qabul qilindi: {doc.file_name}\n\nQo'llanma turi:",
             reply_markup=InlineKeyboardMarkup(kb))
+    elif step == "add_guide_content":
+        title   = context.user_data.get("guide_title","")
+        is_free = context.user_data.get("guide_is_free", 0)
+        context.user_data.clear()
+        db.add_guide(title, doc.file_id, is_free)
+        await update.message.reply_text(
+            "✅ Qollanma saqlandi: " + title,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("📚 Qollanmalarga", callback_data="adm_guides")
+            ]]))
 
 # ═══════════════════════════════════════════════════════
 #  MATN XABARLARI
