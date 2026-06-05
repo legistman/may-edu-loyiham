@@ -1783,25 +1783,16 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["step"]        = "pdf_key"
         n = context.user_data.get("pdf_count",30)
         await update.message.reply_text(f"✅ PDF qabul qilindi!\n\n{n} ta javob kalitini yozing (ABCD):")
-    elif step == "waiting_guide_file":
-        context.user_data["guide_file_id"]  = doc.file_id
-        context.user_data["guide_content"]  = doc.file_name or "PDF fayl"
-        context.user_data["step"] = "add_guide_type"
+    elif step in ("waiting_guide_file", "add_guide_content"):
+        # PDF fayl qabul qilindi - tur so'raymiz
+        context.user_data["guide_file_id"] = doc.file_id
+        context.user_data["guide_fname"]   = doc.file_name or "PDF"
+        context.user_data["step"]          = "add_guide_type"
         kb = [[InlineKeyboardButton("🆓 Bepul", callback_data="guide_type_free"),
                InlineKeyboardButton("👑 PRO",   callback_data="guide_type_pro")]]
         await update.message.reply_text(
-            f"✅ PDF qabul qilindi: {doc.file_name}\n\nQo'llanma turi:",
+            "✅ PDF qabul qilindi: " + (doc.file_name or "fayl") + "\n\nQo'llanma turi:",
             reply_markup=InlineKeyboardMarkup(kb))
-    elif step == "add_guide_content":
-        title   = context.user_data.get("guide_title","")
-        is_free = context.user_data.get("guide_is_free", 0)
-        context.user_data.clear()
-        db.add_guide(title, doc.file_id, is_free)
-        await update.message.reply_text(
-            "✅ Qollanma saqlandi: " + title,
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("📚 Qollanmalarga", callback_data="adm_guides")
-            ]]))
 
 # ═══════════════════════════════════════════════════════
 #  MATN XABARLARI
@@ -2090,16 +2081,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if step == "add_guide_title":
             context.user_data["guide_title"] = txt
-            context.user_data["step"] = "add_guide_content"
-            await update.message.reply_text(f"✅ Sarlavha: {txt}\n\nMatnini yozing (yoki fayl yuboring):")
+            context.user_data["step"] = "waiting_guide_file"
+            await update.message.reply_text(
+                "✅ Sarlavha: " + txt + "\n\n"
+                "📎 Endi PDF faylni yuboring:\n"
+                "Qogoz qisqich tugmasini bosib Document bo'limidan PDF tanlang.")
             return
 
         if step == "add_guide_content":
-            title   = context.user_data.get("guide_title","")
-            is_free = context.user_data.get("guide_is_free", 0)
+            # Matn emas, PDF fayl kerak
             await update.message.reply_text(
-                "PDF fayl yuboring! Qogoz qisqich tugmasini bosib PDF tanlang.")
+                "📎 PDF faylni yuboring!\n\n"
+                "Telefondagi qogoz qisqich (📎) tugmasini bosib PDF faylni tanlang.")
             return
+
     # ── FOYDALANUVCHI steplari ──────────────────────────────────────────
     # Ro'yxatdan o'tish
     if step == "waiting_fullname":
